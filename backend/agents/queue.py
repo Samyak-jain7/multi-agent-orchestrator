@@ -194,6 +194,13 @@ class TaskQueue:
         task_type: str,
         payload: Dict[str, Any]
     ) -> str:
+        # Prevent memory leak by pruning old tasks
+        if len(self._tasks) > 1000:
+            # Remove 100 oldest tasks
+            oldest_ids = sorted(self._tasks.keys(), key=lambda x: self._tasks[x].created_at)[:100]
+            for tid in oldest_ids:
+                del self._tasks[tid]
+
         task_id = str(uuid.uuid4())
 
         task = QueuedTask(

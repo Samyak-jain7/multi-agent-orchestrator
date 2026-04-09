@@ -111,7 +111,9 @@ class AgentExecutor:
 
         llm = self._get_llm(agent)
 
-        system_msg = SystemMessage(content=agent.system_prompt)
+        # Simple input sanitization
+        sanitized_prompt = agent.system_prompt.replace("{", "{{").replace("}", "}}")
+        system_msg = SystemMessage(content=sanitized_prompt)
 
         user_content = self._format_input(input_data)
 
@@ -131,9 +133,11 @@ class AgentExecutor:
 
     def _parse_output(self, output: str) -> Dict[str, Any]:
         try:
-            json_match = re.search(r'\{[^{}]*\}', output, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
+            # Find the first '{' and last '}' to handle nested objects
+            start_idx = output.find('{')
+            end_idx = output.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                return json.loads(output[start_idx:end_idx + 1])
         except json.JSONDecodeError:
             pass
 

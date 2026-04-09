@@ -218,7 +218,7 @@ async def retry_task(task_id: str, db: AsyncSession = Depends(get_db)):
         )
 
     task.status = TaskStatus.PENDING.value
-    task.retry_count = task.retry_count + 1
+    task.retry_count = (task.retry_count or 0) + 1
     task.error = None
     task.output = None
     task.started_at = None

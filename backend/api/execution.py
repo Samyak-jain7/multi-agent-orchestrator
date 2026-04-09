@@ -97,7 +97,7 @@ async def stream_workflow_events(workflow_id: str, request: Request):
                     yield f"data: {data}\n\n"
 
                 except asyncio.TimeoutError:
-                    if (datetime.utcnow() - last_event_time).seconds > 60:
+                    if (datetime.utcnow() - last_event_time).total_seconds() > 60:
                         break
 
                     yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
