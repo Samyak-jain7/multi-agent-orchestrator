@@ -5,14 +5,31 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: production
+    container_name: orchestrator-backend
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     environment:
+      # Database
       - DATABASE_URL=sqlite+aiosqlite:///./orchestrator.db
+      # LLM Providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Server
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=${PORT:-8000}
+      # URLs
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      # Security
+      - APP_API_KEY=${APP_API_KEY:-}
+      # Execution
+      - MAX_CONCURRENT_TASKS=${MAX_CONCURRENT_TASKS:-10}
+      - TASK_TIMEOUT_SECONDS=${TASK_TIMEOUT_SECONDS:-300}
+      # Redis (optional – leave empty to disable)
+      - REDIS_URL=${REDIS_URL:-}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENV=${ENV:-production}
     volumes:
       - backend-data:/app
     healthcheck:
@@ -20,27 +37,40 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 15s
     restart: unless-stopped
+    networks:
+      - orchestrator-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: runner
+    container_name: orchestrator-frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000/api/v1}
+      - NEXT_TELEMETRY_DISABLED=1
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 20s
     restart: unless-stopped
+    networks:
+      - orchestrator-network
 
 volumes:
   backend-data:
+    driver: local
+
+networks:
+  orchestrator-network:
+    driver: bridge
