@@ -304,9 +304,9 @@ After a workflow completes, output is stored at two levels:
 
 | Provider | Best For | Recommended Model |
 |----------|----------|-------------------|
+| **OpenAI** | General purpose, complex reasoning | `GPT-5.4` or `GPT-5.4-mini` |
+| **Anthropic** | Long context, complex reasoning | `Claude Opus 4.6` or `Claude Sonnet 4.6` |
 | **MiniMax** | Cost-effective, fast, agentic tasks | `MiniMax-M2.7` or `MiniMax-M2.7-highspeed` |
-| **OpenAI** | General purpose, tool use | `GPT-4o` or `GPT-4o-mini` |
-| **Anthropic** | Long context, complex reasoning | `Claude 3.5 Sonnet` or `Claude 3 Opus` |
 | **Ollama** | Local/self-hosted models | `llama3.1`, `mistral`, `codellama` |
 
 MiniMax is set as the default provider for new agents (and is used as the system default in the backend).
