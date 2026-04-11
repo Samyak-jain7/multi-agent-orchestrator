@@ -15,6 +15,11 @@ services:
       # LLM Providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
+      # Default LLM
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-minimax}
+      - DEFAULT_MODEL_NAME=${DEFAULT_MODEL_NAME:-MiniMax-M2.7}
       # Server
       - HOST=0.0.0.0
       - PORT=${PORT:-8000}
