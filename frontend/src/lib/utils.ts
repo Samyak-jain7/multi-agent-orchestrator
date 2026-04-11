@@ -47,6 +47,7 @@ export function getProviderLabel(provider: string): string {
   const labels: Record<string, string> = {
     openai: 'OpenAI',
     anthropic: 'Anthropic',
+    minimax: 'MiniMax',
     ollama: 'Ollama',
   };
   return labels[provider] || provider;
