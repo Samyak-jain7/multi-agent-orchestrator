@@ -32,23 +32,19 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="modal-backdrop">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="modal-backdrop-overlay"
         onClick={onClose}
       />
-      <div
-        className={cn(
-          'relative z-50 w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg',
-          className
-        )}
-      >
+      <div className={cn('modal', className)}>
         {title && (
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{title}</h2>
+          <div className="modal-header">
+            <h2 className="modal-title">{title}</h2>
             <button
               onClick={onClose}
-              className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100"
+              className="modal-close"
+              aria-label="Close modal"
             >
               <X className="h-4 w-4" />
             </button>

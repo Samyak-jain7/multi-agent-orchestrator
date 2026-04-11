@@ -10,9 +10,45 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, Bot } from 'lucide-react';
 import { getStatusColor, getProviderLabel } from '@/lib/utils';
 import type { Agent, LLMProvider } from '@/types';
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <Card>
+      <CardContent>
+        <div className="empty-state">
+          <Bot className="empty-state-icon" style={{ width: '48px', height: '48px' }} />
+          <h3>No agents yet</h3>
+          <p>Create your first agent to start orchestrating complex AI workflows</p>
+          <Button onClick={onCreate} style={{ marginTop: '8px' }}>
+            <Plus className="h-4 w-4" />
+            Create Agent
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="card" style={{ padding: '20px' }}>
+          <div className="skeleton" style={{ height: '20px', width: '60%', marginBottom: '12px' }} />
+          <div className="skeleton" style={{ height: '14px', width: '40%', marginBottom: '8px' }} />
+          <div className="skeleton" style={{ height: '14px', width: '50%', marginBottom: '16px' }} />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="skeleton" style={{ height: '32px', flex: 1 }} />
+            <div className="skeleton" style={{ height: '32px', width: '32px' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function AgentList() {
   const queryClient = useQueryClient();
@@ -33,35 +69,39 @@ export function AgentList() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6">
+        <div className="page-header">
+          <h2>Agents</h2>
+          <p>Configure and manage your AI agents</p>
+        </div>
+        <LoadingSkeleton />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Agents</h2>
-          <p className="text-muted-foreground">Configure and manage your AI agents</p>
+      <div className="flex items-center justify-between" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div className="page-header" style={{ marginBottom: 0 }}>
+          <h2>Agents</h2>
+          <p>Configure and manage your AI agents</p>
         </div>
         <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="h-4 w-4" />
           Create Agent
         </Button>
       </div>
 
       {agents && agents.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent: Agent) => (
-            <Card key={agent.id} className="cursor-pointer hover:shadow-md transition-shadow">
+        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+          {agents.map((agent: Agent, idx: number) => (
+            <Card key={agent.id} className="card-animate" style={{ cursor: 'pointer', animationDelay: `${idx * 60}ms` }}>
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div style={{ flex: 1 }}>
                     <CardTitle>{agent.name}</CardTitle>
                     {agent.description && (
-                      <CardDescription className="mt-1">{agent.description}</CardDescription>
+                      <CardDescription style={{ marginTop: '6px' }}>{agent.description}</CardDescription>
                     )}
                   </div>
                   <Badge className={getStatusColor(agent.status)}>
@@ -70,26 +110,26 @@ export function AgentList() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Provider:</span>
-                    <span className="font-medium">{getProviderLabel(agent.model_provider)}</span>
+                <div>
+                  <div className="data-row" style={{ padding: '6px 0' }}>
+                    <span className="data-label">Provider</span>
+                    <span className="data-value mono-value">{getProviderLabel(agent.model_provider)}</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Model:</span>
-                    <span className="font-medium">{agent.model_name}</span>
+                  <div className="data-row" style={{ padding: '6px 0' }}>
+                    <span className="data-label">Model</span>
+                    <span className="data-value mono-value" style={{ fontSize: '0.8rem' }}>{agent.model_name}</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Tools:</span>
-                    <span className="font-medium">{agent.tools?.length || 0}</span>
+                  <div className="data-row" style={{ padding: '6px 0', borderBottom: 'none' }}>
+                    <span className="data-label">Tools</span>
+                    <span className="data-value">{agent.tools?.length || 0}</span>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="gap-2">
+              <CardFooter>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  style={{ flex: 1 }}
                   onClick={() => setSelectedAgent(agent)}
                 >
                   View
@@ -99,6 +139,7 @@ export function AgentList() {
                   size="sm"
                   onClick={() => deleteMutation.mutate(agent.id)}
                   disabled={deleteMutation.isPending}
+                  style={{ marginLeft: '8px' }}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -107,14 +148,7 @@ export function AgentList() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex h-64 items-center justify-center">
-            <div className="text-center">
-              <p className="text-lg font-medium">No agents yet</p>
-              <p className="text-muted-foreground">Create your first agent to get started</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState onCreate={() => setIsCreateModalOpen(true)} />
       )}
 
       <CreateAgentModal
@@ -172,30 +206,28 @@ function CreateAgentModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Agent">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="text-sm font-medium">Name</label>
+        <div className="form-group">
+          <label className="form-label">Name</label>
           <Input
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="Research Agent"
             required
-            className="mt-1"
           />
         </div>
 
-        <div>
-          <label className="text-sm font-medium">Description</label>
+        <div className="form-group">
+          <label className="form-label">Description</label>
           <Input
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Agents that research topics on the web"
-            className="mt-1"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">Provider</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="form-group">
+            <label className="form-label">Provider</label>
             <Select
               value={formData.model_provider}
               onChange={(e) => setFormData({ ...formData, model_provider: e.target.value as LLMProvider })}
@@ -203,38 +235,36 @@ function CreateAgentModal({
                 { value: 'openai', label: 'OpenAI' },
                 { value: 'anthropic', label: 'Anthropic' },
               ]}
-              className="mt-1"
             />
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Model</label>
+          <div className="form-group">
+            <label className="form-label">Model</label>
             <Input
               value={formData.model_name}
               onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
               placeholder="gpt-4o"
-              className="mt-1"
             />
           </div>
         </div>
 
-        <div>
-          <label className="text-sm font-medium">System Prompt</label>
+        <div className="form-group">
+          <label className="form-label">System Prompt</label>
           <Textarea
             value={formData.system_prompt}
             onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
             placeholder="You are a helpful research assistant..."
-            className="mt-1 min-h-[120px]"
             required
+            style={{ minHeight: '120px' }}
           />
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="form-actions">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={createMutation.isPending}>
-            {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Create
           </Button>
         </div>
@@ -253,48 +283,48 @@ function AgentDetailModal({
   onClose: () => void;
 }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={agent.name} className="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={agent.name} className="modal-wide">
       <div className="space-y-4">
         {agent.description && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Description</label>
-            <p className="mt-1">{agent.description}</p>
+          <div className="form-group">
+            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Description</label>
+            <p style={{ fontSize: '0.9rem' }}>{agent.description}</p>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Provider</label>
-            <p className="mt-1">{getProviderLabel(agent.model_provider)}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="form-group">
+            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Provider</label>
+            <p className="mono-value">{getProviderLabel(agent.model_provider)}</p>
           </div>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Model</label>
-            <p className="mt-1">{agent.model_name}</p>
+          <div className="form-group">
+            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Model</label>
+            <p className="mono-value">{agent.model_name}</p>
           </div>
         </div>
 
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Status</label>
-          <div className="mt-1">
+        <div className="form-group">
+          <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Status</label>
+          <div style={{ marginTop: '4px' }}>
             <Badge className={getStatusColor(agent.status)}>{agent.status}</Badge>
           </div>
         </div>
 
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">System Prompt</label>
-          <div className="mt-1 rounded-md bg-muted p-3">
-            <pre className="text-sm whitespace-pre-wrap">{agent.system_prompt}</pre>
+        <div className="form-group">
+          <label className="form-label" style={{ color: 'var(--text-secondary)' }}>System Prompt</label>
+          <div className="code-block" style={{ marginTop: '8px' }}>
+            <pre style={{ whiteSpace: 'pre-wrap' }}>{agent.system_prompt}</pre>
           </div>
         </div>
 
         {agent.tools && agent.tools.length > 0 && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Tools</label>
-            <div className="mt-2 space-y-2">
+          <div className="form-group">
+            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Tools</label>
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {agent.tools.map((tool, idx) => (
-                <div key={idx} className="rounded-md border p-3">
-                  <p className="font-medium">{tool.name}</p>
-                  <p className="text-sm text-muted-foreground">{tool.description}</p>
+                <div key={idx} style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px' }}>
+                  <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{tool.name}</p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{tool.description}</p>
                 </div>
               ))}
             </div>

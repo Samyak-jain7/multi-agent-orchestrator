@@ -1,54 +1,51 @@
 import { cn } from '@/lib/utils';
+import { CSSProperties } from 'react';
 
 interface CardProps {
   children: React.ReactNode;
   className?: string;
+  style?: CSSProperties;
 }
 
-export function Card({ children, className }: CardProps) {
+export function Card({ children, className, style }: CardProps) {
   return (
-    <div
-      className={cn(
-        'rounded-lg border bg-card text-card-foreground shadow-sm',
-        className
-      )}
-    >
+    <div className={cn('card', className)} style={style}>
       {children}
     </div>
   );
 }
 
-export function CardHeader({ children, className }: CardProps) {
+export function CardHeader({ children, className, style }: CardProps) {
   return (
-    <div className={cn('flex flex-col space-y-1.5 p-6', className)}>
+    <div className={cn('card-header', className)} style={style}>
       {children}
     </div>
   );
 }
 
-export function CardTitle({ children, className }: CardProps) {
+export function CardTitle({ children, className, style }: CardProps) {
   return (
-    <h3 className={cn('font-semibold text-lg leading-none tracking-tight', className)}>
+    <h3 className={cn('card-title', className)} style={style}>
       {children}
     </h3>
   );
 }
 
-export function CardDescription({ children, className }: CardProps) {
+export function CardDescription({ children, className, style }: CardProps) {
   return (
-    <p className={cn('text-sm text-muted-foreground', className)}>
+    <p className={cn('card-description', className)} style={style}>
       {children}
     </p>
   );
 }
 
-export function CardContent({ children, className }: CardProps) {
-  return <div className={cn('p-6 pt-0', className)}>{children}</div>;
+export function CardContent({ children, className, style }: CardProps) {
+  return <div className={cn('card-content', className)} style={style}>{children}</div>;
 }
 
-export function CardFooter({ children, className }: CardProps) {
+export function CardFooter({ children, className, style }: CardProps) {
   return (
-    <div className={cn('flex items-center p-6 pt-0', className)}>
+    <div className={cn('card-footer', className)} style={style}>
       {children}
     </div>
   );

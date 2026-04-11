@@ -7,9 +7,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { Loader2, RefreshCw, Play, StopCircle } from 'lucide-react';
-import { getStatusColor, formatRelativeTime } from '@/lib/utils';
+import { Loader2, RefreshCw, Play, StopCircle, Activity } from 'lucide-react';
+import { formatRelativeTime } from '@/lib/utils';
 import type { ExecutionEvent, Workflow } from '@/types';
+
+function getEventColor(event: ExecutionEvent): string {
+  switch (event.event_type || event.type) {
+    case 'workflow_started':
+    case 'task_started':
+      return 'var(--accent)';
+    case 'workflow_completed':
+    case 'task_completed':
+      return 'var(--success)';
+    case 'task_failed':
+      return 'var(--danger)';
+    default:
+      return 'var(--text-muted)';
+  }
+}
 
 export function EventStream() {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
@@ -80,32 +95,31 @@ export function EventStream() {
   }, []);
 
   const getEventIcon = (event: ExecutionEvent) => {
+    const color = getEventColor(event);
     switch (event.event_type || event.type) {
       case 'workflow_started':
-        return <Play className="h-4 w-4 text-blue-500" />;
-      case 'workflow_completed':
-        return <RefreshCw className="h-4 w-4 text-green-500" />;
       case 'task_started':
-        return <Play className="h-4 w-4 text-blue-400" />;
+        return <Play style={{ color, height: '16px', width: '16px' }} />;
+      case 'workflow_completed':
       case 'task_completed':
-        return <RefreshCw className="h-4 w-4 text-green-400" />;
+        return <RefreshCw style={{ color, height: '16px', width: '16px' }} />;
       case 'task_failed':
-        return <StopCircle className="h-4 w-4 text-red-400" />;
+        return <StopCircle style={{ color, height: '16px', width: '16px' }} />;
       case 'heartbeat':
-        return <RefreshCw className="h-4 w-4 text-gray-400 animate-spin" />;
+        return <RefreshCw style={{ color: 'var(--text-muted)', height: '16px', width: '16px', animation: 'spin 1s linear infinite' }} />;
       default:
-        return <RefreshCw className="h-4 w-4 text-gray-400" />;
+        return <Activity style={{ color: 'var(--text-muted)', height: '16px', width: '16px' }} />;
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Event Stream</h2>
-          <p className="text-muted-foreground">Real-time execution monitoring</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div className="page-header" style={{ marginBottom: 0 }}>
+          <h2>Event Stream</h2>
+          <p>Real-time execution monitoring</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Select
             value={selectedWorkflowId}
             onChange={(e) => setSelectedWorkflowId(e.target.value)}
@@ -116,17 +130,17 @@ export function EventStream() {
                 label: `${w.name} (running)`,
               })),
             ]}
-            className="w-64"
+            style={{ width: '240px' }}
             disabled={isStreaming}
           />
           {!isStreaming ? (
             <Button onClick={startStreaming} disabled={!selectedWorkflowId}>
-              <Play className="mr-2 h-4 w-4" />
+              <Play className="h-4 w-4" />
               Start Stream
             </Button>
           ) : (
             <Button variant="destructive" onClick={stopStreaming}>
-              <StopCircle className="mr-2 h-4 w-4" />
+              <StopCircle className="h-4 w-4" />
               Stop Stream
             </Button>
           )}
@@ -135,65 +149,80 @@ export function EventStream() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Live Events</span>
             {isStreaming && (
-              <Badge className="bg-green-100 text-green-700 animate-pulse">
+              <div className="live-badge">
+                <span className="live-dot" />
                 Live
-              </Badge>
+              </div>
             )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {events.length > 0 ? (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
               {events.map((event, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-3 p-3 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px',
+                    padding: '12px',
+                    borderRadius: 'var(--radius)',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid var(--border)',
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                 >
-                  <div className="mt-0.5">{getEventIcon(event)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm">
+                  <div style={{ marginTop: '2px', flexShrink: 0 }}>
+                    {getEventIcon(event)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 500, fontSize: '0.875rem', fontFamily: 'Chakra Petch, sans-serif' }}>
                         {event.event_type || event.type}
-                      </p>
+                      </span>
                       {event.task_id && (
-                        <Badge variant="outline" className="text-xs">
-                          Task: {event.task_id.slice(0, 8)}...
+                        <Badge variant="outline" style={{ fontSize: '0.7rem', fontFamily: 'JetBrains Mono, monospace' }}>
+                          Task: {String(event.task_id).slice(0, 8)}...
                         </Badge>
                       )}
                     </div>
                     {event.message && (
-                      <p className="text-sm text-muted-foreground mt-1">
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                         {event.message}
                       </p>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {event.timestamp
-                        ? formatRelativeTime(event.timestamp)
-                        : 'Unknown time'}
+                    <p className="mono-value" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                      {event.timestamp ? formatRelativeTime(event.timestamp) : 'Unknown time'}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex h-48 items-center justify-center">
-              <div className="text-center">
+            <div className="loading-container" style={{ height: '200px' }}>
+              <div style={{ textAlign: 'center' }}>
                 {isStreaming ? (
                   <>
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
-                    <p className="mt-2 text-muted-foreground">Waiting for events...</p>
+                    <div className="loading-spinner" style={{ margin: '0 auto' }} />
+                    <p style={{ marginTop: '12px', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                      Waiting for events...
+                    </p>
                   </>
                 ) : (
-                  <>
-                    <p className="text-muted-foreground">
+                  <div className="empty-state" style={{ padding: '24px' }}>
+                    <Activity className="empty-state-icon" style={{ width: '36px', height: '36px' }} />
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
                       {runningWorkflows.length > 0
                         ? 'Select a running workflow and start streaming'
                         : 'No workflows are currently running'}
                     </p>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
