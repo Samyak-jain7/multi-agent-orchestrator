@@ -272,6 +272,14 @@ class AgentExecutor:
                 results[task.id] = {"error": str(e)}
 
         await self._update_workflow_status(workflow_id, WorkflowStatus.COMPLETED)
+
+        # Persist aggregated task_results to the workflow so frontend can show them
+        workflow_update = update(WorkflowModel).where(
+            WorkflowModel.id == workflow_id
+        ).values(output={"task_results": results})
+        await self.db.execute(workflow_update)
+        await self.db.commit()
+
         await self._emit_event(
             event_type="workflow_completed",
             workflow_id=workflow_id,

@@ -141,7 +141,11 @@ export function TaskList() {
 
                 {task.status === 'completed' && task.output && (
                   <div className="mt-3 rounded-md bg-green-50 border border-green-200 p-3">
-                    <p className="text-sm text-green-700 font-medium">Completed successfully</p>
+                    <p className="text-sm text-green-700 font-medium mb-1">Output:</p>
+                    <pre className="text-xs text-green-800 overflow-x-auto max-h-24">
+                      {JSON.stringify(task.output, null, 2).slice(0, 300)}
+                      {JSON.stringify(task.output).length > 300 ? '...' : ''}
+                    </pre>
                   </div>
                 )}
               </CardContent>

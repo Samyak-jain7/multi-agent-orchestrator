@@ -54,6 +54,7 @@ async def list_workflows(
             updated_at=wf.updated_at,
             started_at=wf.started_at,
             completed_at=wf.completed_at,
+            output=wf.output,
         )
         for wf in workflows
     ]
@@ -84,6 +85,7 @@ async def get_workflow(workflow_id: str, db: AsyncSession = Depends(get_db)):
         updated_at=workflow.updated_at,
         started_at=workflow.started_at,
         completed_at=workflow.completed_at,
+        output=workflow.output,
     )
 
 
@@ -114,6 +116,7 @@ async def create_workflow(workflow_data: WorkflowCreate, db: AsyncSession = Depe
         updated_at=workflow.updated_at,
         started_at=workflow.started_at,
         completed_at=workflow.completed_at,
+        output=workflow.output,
     )
 
 
@@ -156,6 +159,7 @@ async def update_workflow(
         updated_at=workflow.updated_at,
         started_at=workflow.started_at,
         completed_at=workflow.completed_at,
+        output=workflow.output,
     )
 
 
