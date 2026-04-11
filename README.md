@@ -182,37 +182,134 @@ npm run dev
 
 ## Usage Guide
 
+### System Prompt Engineering
+
+The **System Prompt** is the most critical field when creating an agent. It defines:
+- Who the agent is and what it does
+- How it should behave and respond
+- What output format it should produce
+- Any constraints or rules it must follow
+
+**Tips for effective prompts:**
+- Be specific about the role (e.g., "You are a senior financial analyst specializing in SaaS companies")
+- Define output format clearly (e.g., "Always return your analysis as JSON with fields: summary, metrics{}, risks[]")
+- Set boundaries (e.g., "Never invent data. If you don't know, say so.")
+- Include fallback behavior (e.g., "If the input is unclear, ask clarifying questions")
+
+**Example system prompt:**
+```
+You are a market research analyst. Your role:
+1. Analyze the given topic thoroughly using web search
+2. Identify key players, market size, and trends
+3. Summarize findings in a structured report
+
+Output format (always follow this exact JSON structure):
+{
+  "topic": "<the topic analyzed>",
+  "key_players": ["<company 1>", "<company 2>"],
+  "market_size": "<estimated size with source>",
+  "trends": ["<trend 1>", "<trend 2>", "<trend 3>"],
+  "risks": ["<risk 1>", "<risk 2>"],
+  "summary": "<2-3 paragraph executive summary>"
+}
+
+Rules:
+- Only use verified information from searches
+- Do not guess or fabricate data
+- If a section cannot be completed, use null for that field
+```
+
 ### Creating an Agent
 
 1. Navigate to **Agents**
 2. Click **Create Agent**
 3. Fill in:
    - **Name** – descriptive name, e.g. `"Research Agent"`
-   - **Provider** – OpenAI or Anthropic
-   - **Model** – e.g. `gpt-4o`, `claude-3-opus-20240229`
-   - **System Prompt** – the agent's instructions
+   - **Provider** – select from OpenAI, Anthropic, MiniMax, or Ollama
+   - **Model** – dropdown auto-updates based on selected provider (recommended models shown with descriptions)
+   - **System Prompt** – the agent's instructions (see System Prompt Engineering above)
 4. Click **Create**
 
 ### Creating a Workflow
 
 1. Navigate to **Workflows**
 2. Click **Create Workflow**
-3. Fill in name and description, select agents to include
+3. Fill in name and description, select agents to include (order matters — agents execute in the order listed)
 4. Click **Create**
 
-### Creating Tasks
+### Input Data Format
 
-1. Navigate to **Tasks**
-2. Click **Create Task**
-3. Select the workflow and agent, provide title and JSON input data
-4. Click **Create**
+When executing a workflow, **Input Data** is passed as JSON to every agent in the pipeline. Each agent's task-level `input_data` gets merged with the workflow's global input at runtime.
+
+**Example — Market Research Workflow:**
+```json
+{
+  "topic": "AI coding assistants in 2024",
+  "depth": "comprehensive",
+  "target_audience": "enterprise CTOs"
+}
+```
+
+**How agents access input:** Each agent receives `input_data` in their execution state. The fields drive what the agent works on.
+
+**Passing agent-specific input:**
+```json
+{
+  "query": "What are the top 5 trends in AI?",
+  "search_depth": "shallow",
+  "output_format": "bullet_points"
+}
+```
 
 ### Executing a Workflow
 
-1. Navigate to **Workflows** → find your workflow → **Run**
+1. Navigate to **Workflows** → find your workflow → click **Run**
 2. Provide input data as JSON, e.g. `{"topic": "AI trends"}`
 3. Click **Execute**
-4. Monitor progress in the **Events** tab
+4. Monitor progress in the **Events** tab (real-time SSE stream)
+
+### Where to Find Output
+
+After a workflow completes, output is stored at two levels:
+
+**Task-level output** (each agent's individual result):
+- Available via `GET /api/v1/execution/task/{task_id}/status`
+- Frontend: **Tasks** tab → click "View Details" → scroll to **Output** section
+
+**Workflow-level output** (aggregated from all tasks):
+- Available via `GET /api/v1/workflows/{id}`
+- Frontend: **Workflows** tab → "Details" → completed workflows show aggregated `task_results`
+
+**Sample task output (JSON):**
+```json
+{
+  "result": "The market research analysis is complete. Key findings:\n\n**Topic:** AI coding assistants in 2024\n\n**Key Players:** GitHub Copilot, Cursor AI, Replit Agent...\n\n**Market Size:** $4.5B globally (Grand View Research), growing at 28% CAGR...",
+  "metadata": {
+    "model": "MiniMax-M2.7",
+    "tokens_used": 1842,
+    "latency_ms": 2340
+  }
+}
+```
+
+### Agent Best Practices
+
+1. **One agent, one job** — Don't overload a single agent with too many responsibilities
+2. **Clear output contracts** — Always specify what format the agent should return in the system prompt
+3. **Dependency order matters** — When creating a workflow, add agents in execution order (e.g., research → analyze → report)
+4. **Input data shapes behavior** — The JSON you pass at workflow execution time drives agent behavior
+5. **System prompt examples** — Include 1-2 examples of ideal inputs/outputs in complex prompts
+
+### Model Recommendations
+
+| Provider | Best For | Recommended Model |
+|----------|----------|-------------------|
+| **MiniMax** | Cost-effective, fast, agentic tasks | `MiniMax-M2.7` or `MiniMax-M2.7-highspeed` |
+| **OpenAI** | General purpose, tool use | `GPT-4o` or `GPT-4o-mini` |
+| **Anthropic** | Long context, complex reasoning | `Claude 3.5 Sonnet` or `Claude 3 Opus` |
+| **Ollama** | Local/self-hosted models | `llama3.1`, `mistral`, `codellama` |
+
+MiniMax is set as the default provider for new agents (and is used as the system default in the backend).
 
 ---
 
@@ -281,6 +378,56 @@ docker-compose up -d --scale frontend=2
 docker-compose logs -f backend
 docker-compose logs -f frontend
 ```
+
+---
+
+## Troubleshooting
+
+### "no such column: workflows.output"
+
+The database schema is stale after a recent update. Run this once on your server:
+
+```bash
+docker exec orchestrator-backend python3 -c "
+import sqlite3
+conn = sqlite3.connect('/app/data/orchestrator.db')
+cur = conn.cursor()
+cur.execute('ALTER TABLE workflows ADD COLUMN output TEXT')
+conn.commit()
+print('Migrated:', [row[1] for row in cur.execute('PRAGMA table_info(workflows)').fetchall()])
+conn.close()
+"
+```
+
+Then restart the backend:
+```bash
+docker-compose restart backend
+```
+
+### Workflow executes but shows no output
+
+- Check the **Tasks** tab — did tasks get created? If the workflow has agents but no tasks appear, the task auto-creation may have failed.
+- Check the **Events** tab for real-time errors during execution.
+- Verify the API key for your LLM provider is set correctly in `backend/.env`.
+- If using MiniMax, ensure `MINIMAX_API_KEY` is set and `MINIMAX_BASE_URL=https://api.minimax.io/v1`.
+
+### Frontend not loading or returning 500 errors
+
+- Ensure the backend is running: `docker-compose logs backend`
+- Check the browser console for CORS errors — ensure `FRONTEND_URL` in backend `.env` matches your frontend URL (e.g., `http://localhost:3000` for local dev).
+- If the DB has schema mismatches, rebuild: `docker-compose down -v && docker-compose up --build` (WARNING: this deletes all data).
+
+### Buttons not working / forms not submitting
+
+- Check `docker-compose logs backend` for the actual error.
+- If seeing middleware errors, check that `APP_API_KEY` is set if enabled, and that you're sending the `X-API-Key` header.
+- Verify the database file is writable: `docker exec orchestrator-backend ls -la /app/data/`
+
+### MiniMax API errors (401 / 403)
+
+- Verify your MiniMax API key is correct in `backend/.env`.
+- Check `MINIMAX_BASE_URL` is set to `https://api.minimax.io/v1` (not the default OpenAI endpoint).
+- Ensure your MiniMax account has credits — keys from platform.minimax.io are pay-as-you-go.
 
 ---
 

@@ -14,6 +14,34 @@ import { Plus, Trash2, Loader2, Bot } from 'lucide-react';
 import { getStatusColor, getProviderLabel } from '@/lib/utils';
 import type { Agent, LLMProvider } from '@/types';
 
+const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string }[]> = {
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o (latest, best overall)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (fast, cost-effective)' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (legacy)' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (legacy)' },
+  ],
+  anthropic: [
+    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (latest)' },
+    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus (most capable)' },
+    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (fast)' },
+  ],
+  minimax: [
+    { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7 (latest, 204k context)' },
+    { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed (~100 tps)' },
+    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5 (prev gen)' },
+    { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed' },
+    { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },
+    { value: 'MiniMax-M2', label: 'MiniMax-M2 (agentic)' },
+  ],
+  ollama: [
+    { value: 'llama3', label: 'Llama 3' },
+    { value: 'llama3.1', label: 'Llama 3.1' },
+    { value: 'mistral', label: 'Mistral' },
+    { value: 'codellama', label: 'Code Llama' },
+  ],
+};
+
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <Card>
@@ -178,8 +206,8 @@ function CreateAgentModal({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    model_provider: 'openai' as LLMProvider,
-    model_name: 'gpt-4o',
+    model_provider: 'minimax' as LLMProvider,
+    model_name: 'MiniMax-M2.7',
     system_prompt: '',
   });
 
@@ -191,8 +219,8 @@ function CreateAgentModal({
       setFormData({
         name: '',
         description: '',
-        model_provider: 'openai',
-        model_name: 'gpt-4o',
+        model_provider: 'minimax',
+        model_name: 'MiniMax-M2.7',
         system_prompt: '',
       });
     },
@@ -230,20 +258,26 @@ function CreateAgentModal({
             <label className="form-label">Provider</label>
             <Select
               value={formData.model_provider}
-              onChange={(e) => setFormData({ ...formData, model_provider: e.target.value as LLMProvider })}
+              onChange={(e) => {
+                const newProvider = e.target.value as LLMProvider;
+                const firstModel = PROVIDER_MODELS[newProvider][0].value;
+                setFormData({ ...formData, model_provider: newProvider, model_name: firstModel });
+              }}
               options={[
                 { value: 'openai', label: 'OpenAI' },
                 { value: 'anthropic', label: 'Anthropic' },
+                { value: 'minimax', label: 'MiniMax' },
+                { value: 'ollama', label: 'Ollama' },
               ]}
             />
           </div>
 
           <div className="form-group">
             <label className="form-label">Model</label>
-            <Input
+            <Select
               value={formData.model_name}
               onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
-              placeholder="gpt-4o"
+              options={PROVIDER_MODELS[formData.model_provider]}
             />
           </div>
         </div>
