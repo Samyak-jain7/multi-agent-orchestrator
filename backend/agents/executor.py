@@ -212,6 +212,21 @@ class AgentExecutor:
         result_tasks = await self.db.execute(stmt_tasks)
         tasks = result_tasks.scalars().all()
 
+        # Auto-create tasks from workflow's agent_ids if none exist
+        if not tasks and workflow.agent_ids:
+            for agent_id in workflow.agent_ids:
+                task_model = TaskModel(
+                    workflow_id=workflow_id,
+                    agent_id=agent_id,
+                    title=f"Task for agent {agent_id}",
+                    input_data={},
+                    status="pending",
+                )
+                self.db.add(task_model)
+            await self.db.commit()
+            result_tasks = await self.db.execute(stmt_tasks)
+            tasks = result_tasks.scalars().all()
+
         results = {}
         task_outputs = {}
 
