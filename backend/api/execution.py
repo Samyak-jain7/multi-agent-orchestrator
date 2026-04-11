@@ -260,7 +260,7 @@ async def create_execution_log(
     message: str,
     task_id: Optional[str] = None,
     agent_id: Optional[str] = None,
-    metadata: Optional[dict] = None,
+    meta_data: Optional[dict] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Manually create an execution log entry (used by agents/workflows)."""
@@ -270,7 +270,7 @@ async def create_execution_log(
         agent_id=agent_id,
         event_type=event_type,
         message=message,
-        metadata=metadata,
+        meta_data=meta_data,
     )
 
     db.add(log)
@@ -284,7 +284,7 @@ async def create_execution_log(
         agent_id=log.agent_id,
         event_type=log.event_type,
         message=log.message,
-        metadata=log.metadata,
+        meta_data=log.meta_data,
         timestamp=log.timestamp,
     )
 
@@ -315,7 +315,7 @@ async def get_execution_logs(
             agent_id=log.agent_id,
             event_type=log.event_type,
             message=log.message,
-            metadata=log.metadata,
+            meta_data=log.meta_data,
             timestamp=log.timestamp,
         )
         for log in logs

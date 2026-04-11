@@ -69,5 +69,5 @@ class ExecutionLogModel(Base):
     agent_id = Column(String, nullable=True)
     event_type = Column(String, nullable=False)
     message = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    meta_data = Column(JSON, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)

@@ -54,6 +54,9 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 # Copy application code
 COPY --chown=appuser:appgroup . .
 
+# Create data directory with correct permissions for SQLite
+RUN mkdir -p /app/data && chown appuser:appgroup /app/data
+
 # Switch to non-root user
 USER appuser
 

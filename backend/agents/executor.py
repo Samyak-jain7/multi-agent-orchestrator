@@ -86,7 +86,7 @@ class AgentExecutor:
                 task_id=task_id,
                 agent_id=agent_id,
                 message=f"Task {task_id} failed: {str(e)}",
-                metadata={"error": str(e)}
+                meta_data={"error": str(e)}
             )
 
         return state
@@ -164,7 +164,7 @@ class AgentExecutor:
         task_id: str = None,
         agent_id: str = None,
         message: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        meta_data: Optional[Dict[str, Any]] = None
     ):
         if self.event_callback:
             event = ExecutionEvent(
@@ -173,7 +173,7 @@ class AgentExecutor:
                 task_id=task_id,
                 agent_id=agent_id,
                 message=message,
-                metadata=metadata
+                meta_data=meta_data
             )
             await self.event_callback(event)
 
