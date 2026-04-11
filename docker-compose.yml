@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   backend:
@@ -11,7 +10,7 @@ services:
       - "${PORT:-8000}:8000"
     environment:
       # Database
-      - DATABASE_URL=sqlite+aiosqlite:///./orchestrator.db
+      - DATABASE_URL=sqlite+aiosqlite:///./data/orchestrator.db
       # LLM Providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -36,7 +35,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ENV=${ENV:-production}
     volumes:
-      - backend-data:/app
+      - backend-data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

@@ -175,7 +175,7 @@ class TaskQueue:
             "task_id": event.task_id,
             "agent_id": event.agent_id,
             "message": event.message,
-            "metadata": event.metadata,
+            "meta_data": event.meta_data,
             "timestamp": event.timestamp.isoformat()
         })
 

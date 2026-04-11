@@ -74,7 +74,7 @@ export interface ExecutionEvent {
   task_id?: string;
   agent_id?: string;
   message?: string;
-  metadata?: Record<string, unknown>;
+  meta_data?: Record<string, unknown>;
   timestamp: string;
   status?: string;
   result?: unknown;
@@ -88,7 +88,7 @@ export interface ExecutionLog {
   agent_id: string | null;
   event_type: string;
   message: string | null;
-  metadata: Record<string, unknown> | null;
+  meta_data: Record<string, unknown> | null;
   timestamp: string;
 }
 

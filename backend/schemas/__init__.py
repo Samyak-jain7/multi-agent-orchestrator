@@ -152,7 +152,7 @@ class ExecutionEvent(BaseModel):
     task_id: Optional[str] = None
     agent_id: Optional[str] = None
     message: str
-    metadata: Optional[Dict[str, Any]] = None
+    meta_data: Optional[Dict[str, Any]] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -163,7 +163,7 @@ class ExecutionLogResponse(BaseModel):
     agent_id: Optional[str] = None
     event_type: str
     message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    meta_data: Optional[Dict[str, Any]] = None
     timestamp: datetime
 
     class Config:
