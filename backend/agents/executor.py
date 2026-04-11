@@ -6,8 +6,6 @@ from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
@@ -30,36 +28,28 @@ class AgentExecutor:
     def __init__(
         self,
         db: AsyncSession,
-        event_callback: Optional[Callable[[ExecutionEvent], Awaitable[None]]] = None
+        event_callback: Optional[Callable[[ExecutionEvent], Awaitable[None]]] = None,
+        env_vars: Optional[Dict[str, str]] = None,
     ):
         self.db = db
         self.event_callback = event_callback
-        self._llm_cache: Dict[str, Any] = {}
+        self.env_vars = env_vars or {}
+        self._provider_cache: Dict[str, Any] = {}
 
-    def _get_llm(self, agent: AgentModel):
-        if agent.id in self._llm_cache:
-            return self._llm_cache[agent.id]
+    def _get_llm(self, agent: AgentModel) -> Any:
+        cache_key = f"{agent.id}"
+        if cache_key in self._provider_cache:
+            return self._provider_cache[cache_key]
 
-        model_provider = agent.model_provider or "openai"
-        model_name = agent.model_name or "gpt-4o"
-
-        if model_provider == "openai":
-            llm = ChatOpenAI(
-                model=model_name,
-                temperature=agent.config.get("temperature", 0.7),
-                api_key=agent.config.get("api_key")
-            )
-        elif model_provider == "anthropic":
-            llm = ChatAnthropic(
-                model=model_name,
-                temperature=agent.config.get("temperature", 0.7),
-                api_key=agent.config.get("api_key")
-            )
-        else:
-            raise ValueError(f"Unsupported provider: {model_provider}")
-
-        self._llm_cache[agent.id] = llm
-        return llm
+        from agents.providers import load_provider_from_agent
+        provider = load_provider_from_agent(
+            agent_model_name=agent.model_name or "MiniMax-M2.7",
+            agent_provider=agent.model_provider or "minimax",
+            agent_config=agent.config or {},
+            env_vars=self.env_vars,
+        )
+        self._provider_cache[cache_key] = provider
+        return provider
 
     async def _execute_agent_task(self, state: AgentState) -> AgentState:
         task_id = state["task_id"]
@@ -109,7 +99,7 @@ class AgentExecutor:
         if not agent:
             raise ValueError(f"Agent {agent_id} not found")
 
-        llm = self._get_llm(agent)
+        provider = self._get_llm(agent)
 
         # Simple input sanitization
         sanitized_prompt = agent.system_prompt.replace("{", "{{").replace("}", "}}")
@@ -117,7 +107,7 @@ class AgentExecutor:
 
         user_content = self._format_input(input_data)
 
-        response = await llm.ainvoke([system_msg, HumanMessage(content=user_content)])
+        response = await provider.ainvoke([system_msg, HumanMessage(content=user_content)])
 
         output_text = response.content if hasattr(response, 'content') else str(response)
 

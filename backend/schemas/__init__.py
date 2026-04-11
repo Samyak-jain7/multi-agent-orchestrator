@@ -30,6 +30,7 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
+    MINIMAX = "minimax"
 
 
 class ToolDefinition(BaseModel):
@@ -41,8 +42,8 @@ class ToolDefinition(BaseModel):
 class AgentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    model_provider: LLMProvider = LLMProvider.OPENAI
-    model_name: str = "gpt-4o"
+    model_provider: LLMProvider = LLMProvider.MINIMAX
+    model_name: str = "MiniMax-M2.7"
     system_prompt: str = Field(..., min_length=1)
     tools: List[ToolDefinition] = Field(default_factory=list)
     config: Dict[str, Any] = Field(default_factory=dict)
