@@ -40,23 +40,21 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center">
-          <div className="flex items-center gap-2 mr-8">
-            <Bot className="h-6 w-6" />
-            <span className="font-bold text-lg">Agent Orchestrator</span>
+      <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <div className="container" style={{ display: 'flex', height: '60px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginRight: '32px' }}>
+            <Bot className="h-6 w-6" style={{ color: 'var(--accent)' }} />
+            <span style={{ fontFamily: 'Chakra Petch, sans-serif', fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+              Agent Orchestrator
+            </span>
           </div>
 
-          <nav className="flex items-center gap-1">
+          <nav className="nav-tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
+                className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.label}
@@ -66,7 +64,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container py-6">
+      <main className="container" style={{ paddingTop: '24px', paddingBottom: '24px' }}>
         {renderContent()}
       </main>
     </div>

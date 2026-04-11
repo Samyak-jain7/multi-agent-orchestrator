@@ -58,6 +58,7 @@ class WorkflowModel(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    output = Column(JSON, nullable=True)
 
 
 class ExecutionLogModel(Base):

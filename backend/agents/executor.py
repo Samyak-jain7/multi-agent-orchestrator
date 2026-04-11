@@ -212,6 +212,21 @@ class AgentExecutor:
         result_tasks = await self.db.execute(stmt_tasks)
         tasks = result_tasks.scalars().all()
 
+        # Auto-create tasks from workflow's agent_ids if none exist
+        if not tasks and workflow.agent_ids:
+            for agent_id in workflow.agent_ids:
+                task_model = TaskModel(
+                    workflow_id=workflow_id,
+                    agent_id=agent_id,
+                    title=f"Task for agent {agent_id}",
+                    input_data={},
+                    status="pending",
+                )
+                self.db.add(task_model)
+            await self.db.commit()
+            result_tasks = await self.db.execute(stmt_tasks)
+            tasks = result_tasks.scalars().all()
+
         results = {}
         task_outputs = {}
 
@@ -257,6 +272,14 @@ class AgentExecutor:
                 results[task.id] = {"error": str(e)}
 
         await self._update_workflow_status(workflow_id, WorkflowStatus.COMPLETED)
+
+        # Persist aggregated task_results to the workflow so frontend can show them
+        workflow_update = update(WorkflowModel).where(
+            WorkflowModel.id == workflow_id
+        ).values(output={"task_results": results})
+        await self.db.execute(workflow_update)
+        await self.db.commit()
+
         await self._emit_event(
             event_type="workflow_completed",
             workflow_id=workflow_id,

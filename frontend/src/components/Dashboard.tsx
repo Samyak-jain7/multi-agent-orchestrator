@@ -7,6 +7,25 @@ import { Badge } from '@/components/ui/Badge';
 import { Activity, Users, Workflow, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils';
 
+function SkeletonCard() {
+  return (
+    <div className="stat-card">
+      <div className="skeleton" style={{ height: '14px', width: '80px', marginBottom: '12px' }} />
+      <div className="skeleton" style={{ height: '32px', width: '60px' }} />
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, heading, description }: { icon: React.ElementType; heading: string; description: string }) {
+  return (
+    <div className="empty-state">
+      <Icon className="empty-state-icon" style={{ width: '40px', height: '40px' }} />
+      <h3>{heading}</h3>
+      <p>{description}</p>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['stats'],
@@ -26,8 +45,8 @@ export function Dashboard() {
 
   if (statsLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="loading-container" style={{ height: '256px' }}>
+        <div className="loading-spinner" />
       </div>
     );
   }
@@ -35,104 +54,108 @@ export function Dashboard() {
   const statCards = [
     {
       title: 'Total Agents',
-      value: stats?.total_agents || 0,
+      value: stats?.total_agents ?? 0,
       icon: Users,
-      color: 'text-blue-600',
+      accentColor: 'var(--accent)',
     },
     {
       title: 'Active Workflows',
-      value: stats?.active_workflows || 0,
+      value: stats?.active_workflows ?? 0,
       icon: Activity,
-      color: 'text-orange-600',
+      accentColor: 'var(--warning)',
     },
     {
       title: 'Completed Today',
-      value: stats?.completed_tasks_today || 0,
+      value: stats?.completed_tasks_today ?? 0,
       icon: CheckCircle,
-      color: 'text-green-600',
+      accentColor: 'var(--success)',
     },
     {
       title: 'Failed Today',
-      value: stats?.failed_tasks_today || 0,
+      value: stats?.failed_tasks_today ?? 0,
       icon: XCircle,
-      color: 'text-red-600',
+      accentColor: 'var(--danger)',
     },
     {
       title: 'Success Rate',
-      value: `${((stats?.success_rate || 0) * 100).toFixed(1)}%`,
+      value: `${((stats?.success_rate ?? 0) * 100).toFixed(1)}%`,
       icon: TrendingUp,
-      color: 'text-purple-600',
+      accentColor: 'var(--accent)',
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Overview of your multi-agent orchestration</p>
+      <div className="page-header">
+        <h2>Dashboard</h2>
+        <p>Overview of your multi-agent orchestration</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {statCards.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+      <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        {statCards.map((stat, idx) => (
+          <div key={stat.title} className="stat-card card-animate" style={{ animationDelay: `${idx * 60}ms` }}>
+            <CardContent style={{ padding: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span className="stat-label">{stat.title}</span>
+                <stat.icon className="stat-icon" style={{ color: stat.accentColor, height: '18px', width: '18px' }} />
               </div>
-              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="stat-value mono-value">{stat.value}</p>
             </CardContent>
-          </Card>
+          </div>
         ))}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+      <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
+        <Card className="card-animate">
           <CardHeader>
             <CardTitle>Recent Agents</CardTitle>
           </CardHeader>
           <CardContent>
             {agents && agents.length > 0 ? (
-              <div className="space-y-4">
+              <div>
                 {agents.slice(0, 5).map((agent: any) => (
-                  <div key={agent.id} className="flex items-center justify-between">
+                  <div key={agent.id} className="data-row">
                     <div>
-                      <p className="font-medium">{agent.name}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{agent.name}</p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
                         {agent.model_provider} / {agent.model_name}
                       </p>
                     </div>
-                    <Badge className={agent.status === 'idle' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                    <Badge className={agent.status === 'idle' ? 'status-completed' : 'status-running'}>
                       {agent.status}
                     </Badge>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No agents created yet</p>
+              <EmptyState
+                icon={Users}
+                heading="No agents yet"
+                description="Create your first agent to get started"
+              />
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-animate" style={{ animationDelay: '80ms' }}>
           <CardHeader>
             <CardTitle>Recent Workflows</CardTitle>
           </CardHeader>
           <CardContent>
             {workflows && workflows.length > 0 ? (
-              <div className="space-y-4">
+              <div>
                 {workflows.slice(0, 5).map((workflow: any) => (
-                  <div key={workflow.id} className="flex items-center justify-between">
+                  <div key={workflow.id} className="data-row">
                     <div>
-                      <p className="font-medium">{workflow.name}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{workflow.name}</p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         {workflow.agent_ids?.length || 0} agents
                       </p>
                     </div>
                     <Badge className={
-                      workflow.status === 'completed' ? 'bg-green-100 text-green-700' :
-                      workflow.status === 'running' ? 'bg-blue-100 text-blue-700' :
-                      'bg-gray-100 text-gray-700'
+                      workflow.status === 'completed' ? 'status-completed' :
+                      workflow.status === 'running' ? 'status-running' :
+                      'status-idle'
                     }>
                       {workflow.status}
                     </Badge>
@@ -140,7 +163,11 @@ export function Dashboard() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No workflows created yet</p>
+              <EmptyState
+                icon={Workflow}
+                heading="No workflows yet"
+                description="Create your first workflow to orchestrate agents"
+              />
             )}
           </CardContent>
         </Card>

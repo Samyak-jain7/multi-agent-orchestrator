@@ -1,23 +1,18 @@
 import { cn } from '@/lib/utils';
+import { CSSProperties } from 'react';
 
 interface BadgeProps {
   children: React.ReactNode;
   variant?: 'default' | 'secondary' | 'outline';
   className?: string;
+  style?: CSSProperties;
 }
 
-export function Badge({ children, variant = 'default', className }: BadgeProps) {
+export function Badge({ children, variant = 'default', className, style }: BadgeProps) {
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors',
-        {
-          'bg-primary text-primary-foreground': variant === 'default',
-          'bg-secondary text-secondary-foreground': variant === 'secondary',
-          'border border-input': variant === 'outline',
-        },
-        className
-      )}
+      className={cn('badge', `badge-${variant}`, className)}
+      style={style}
     >
       {children}
     </span>

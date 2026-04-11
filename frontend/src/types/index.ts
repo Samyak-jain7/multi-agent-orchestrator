@@ -1,4 +1,4 @@
-export type LLMProvider = 'openai' | 'anthropic' | 'ollama';
+export type LLMProvider = 'openai' | 'anthropic' | 'ollama' | 'minimax';
 
 export type AgentStatus = 'idle' | 'busy' | 'error';
 
@@ -55,6 +55,7 @@ export interface Workflow {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  output: Record<string, unknown> | null;
 }
 
 export interface DashboardStats {

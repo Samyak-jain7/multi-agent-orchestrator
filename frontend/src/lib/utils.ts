@@ -28,19 +28,19 @@ export function formatRelativeTime(date: string | null | undefined): string {
   return formatDate(date);
 }
 
+/* Status badge color classes — match CSS variable system */
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    idle: 'bg-gray-100 text-gray-700',
-    pending: 'bg-yellow-100 text-yellow-700',
-    running: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-    cancelled: 'bg-gray-100 text-gray-500',
-    busy: 'bg-orange-100 text-orange-700',
-    error: 'bg-red-100 text-red-700',
+    idle: 'status-idle',
+    pending: 'status-pending',
+    running: 'status-running',
+    completed: 'status-completed',
+    failed: 'status-failed',
+    cancelled: 'status-cancelled',
+    busy: 'status-busy',
+    error: 'status-failed',
   };
-
-  return colors[status] || 'bg-gray-100 text-gray-700';
+  return colors[status] || 'status-idle';
 }
 
 export function getProviderLabel(provider: string): string {
@@ -49,6 +49,5 @@ export function getProviderLabel(provider: string): string {
     anthropic: 'Anthropic',
     ollama: 'Ollama',
   };
-
   return labels[provider] || provider;
 }
