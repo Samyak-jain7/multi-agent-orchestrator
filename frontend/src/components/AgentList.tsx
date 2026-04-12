@@ -16,20 +16,20 @@ import type { Agent, LLMProvider } from '@/types';
 
 const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string }[]> = {
   openai: [
-    { value: 'gpt-5.4', label: 'GPT-5.4 (flagship, 1M context)' },
-    { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro (max capability)' },
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini (fast, cost-effective)' },
-    { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (lightweight)' },
+    { value: 'gpt-4o', label: 'GPT-4o (latest, best overall)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (fast, cost-effective)' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (legacy)' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (legacy)' },
   ],
   anthropic: [
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6 (max reasoning)' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (balanced)' },
-    { value: 'claude-haiku-4', label: 'Claude Haiku 4 (fast)' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (latest)' },
+    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus (most capable)' },
+    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (fast)' },
   ],
   minimax: [
     { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7 (latest, 204k context)' },
     { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed (~100 tps)' },
-    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5' },
+    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5 (prev gen)' },
     { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed' },
     { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },
     { value: 'MiniMax-M2', label: 'MiniMax-M2 (agentic)' },
@@ -206,8 +206,8 @@ function CreateAgentModal({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    model_provider: 'minimax' as LLMProvider,
-    model_name: 'MiniMax-M2.7',
+    model_provider: 'openai' as LLMProvider,
+    model_name: 'gpt-4o',
     system_prompt: '',
   });
 
@@ -219,8 +219,8 @@ function CreateAgentModal({
       setFormData({
         name: '',
         description: '',
-        model_provider: 'minimax',
-        model_name: 'MiniMax-M2.7',
+        model_provider: 'openai',
+        model_name: 'gpt-4o',
         system_prompt: '',
       });
     },

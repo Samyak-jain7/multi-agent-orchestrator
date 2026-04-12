@@ -304,12 +304,20 @@ After a workflow completes, output is stored at two levels:
 
 | Provider | Best For | Recommended Model |
 |----------|----------|-------------------|
-| **OpenAI** | General purpose, complex reasoning | `GPT-5.4` or `GPT-5.4-mini` |
-| **Anthropic** | Long context, complex reasoning | `Claude Opus 4.6` or `Claude Sonnet 4.6` |
-| **MiniMax** | Cost-effective, fast, agentic tasks | `MiniMax-M2.7` or `MiniMax-M2.7-highspeed` |
+| **OpenAI** | General purpose, complex reasoning | `gpt-4o` or `gpt-4o-mini` |
+| **Anthropic** | Long context, complex reasoning | `claude-3-5-sonnet-20241022` or `claude-3-opus-20240229` |
+| **MiniMax** | Cost-effective, fast, 204k context | `MiniMax-M2.7` or `MiniMax-M2.7-highspeed` |
 | **Ollama** | Local/self-hosted models | `llama3.1`, `mistral`, `codellama` |
 
-MiniMax is set as the default provider for new agents (and is used as the system default in the backend).
+OpenAI is set as the default provider for new agents.
+
+### Workflow Execution Flow
+
+1. **Create agents** (e.g., Research Agent, Writer Agent)
+2. **Create workflow** → assign agents in order
+3. **Execute workflow** → pass global input JSON
+4. **Monitor** → Events tab for real-time streaming
+5. **Inspect results** → Tasks tab or workflow detail modal
 
 ---
 
