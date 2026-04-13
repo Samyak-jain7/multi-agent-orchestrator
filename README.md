@@ -94,6 +94,71 @@ npm run dev
 
 ---
 
+## Testing
+
+### Backend Tests (pytest)
+
+```bash
+cd backend
+pip install pytest pytest-asyncio pytest-cov httpx
+pytest backend/tests/ --cov=backend --cov-report=xml --cov-fail-under=70 -v
+```
+
+Tests use a **real aiosqlite in-memory database** — no mocking of database operations. Only LLM provider calls are mocked.
+
+- `backend/tests/integration/test_full_flow.py` — 14 end-to-end tests: agent CRUD → workflow → execute → task completion, cascade delete, retry, SSE streams, execution stats/logs.
+- `backend/tests/integration/test_concurrent_execution.py` — 9 tests: concurrent task limits, task timeout behavior, dependency ordering, queue FIFO, status transitions.
+
+### Frontend Tests (Jest + React Testing Library)
+
+```bash
+cd frontend
+npm run test
+```
+
+### End-to-End Tests (Playwright)
+
+```bash
+# Start backend and frontend first
+cd backend && uvicorn main:app --port 8000 &
+cd frontend && npm run build && npm run start &
+
+# Run Playwright tests
+npx playwright test --project=chromium
+```
+
+> **Note:** Requires browsers to be installed — run `npx playwright install --with-deps chromium` first.
+
+### Smoke Test (Bash)
+
+A lightweight health check that doesn't require the full test suite:
+
+```bash
+chmod +x tests/smoke.sh
+./tests/smoke.sh
+```
+
+This starts the backend with an in-memory DB, hits `/health` and `/ready`, creates an agent via the API, lists agents, and asserts the created agent appears in the list. Exit code 0 = pass.
+
+### Running All Tests Locally (act)
+
+To simulate the full CI pipeline locally using [Act](https://github.com/nektos/act):
+
+```bash
+# Run the full CI pipeline
+act
+
+# Run only the backend test job
+act -j test-backend
+
+# Run with live output (no sandbox)
+act --container-architecture linux/amd64
+```
+
+> **Tip:** On first run, Act will pull the GitHub Actions runner image (~2 GB). Use `act -s` to skip the artifact upload steps for faster iteration.
+
+---
+
 ## Environment Variables
 
 ### Backend (`backend/.env`)
