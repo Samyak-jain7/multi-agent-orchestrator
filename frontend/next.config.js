@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  eslint: {
+    // Don't fail build due to lint errors (CI runs lint separately)
+    ignoreDuringBuilds: true,
+  },
   async rewrites() {
     return [
       {
