@@ -136,6 +136,7 @@ class TaskQueue:
         payload: Dict[str, Any],
         task: QueuedTask
     ) -> Dict[str, Any]:
+        import os
         from agents.executor import AgentExecutor
         from core.database import get_db_context
         from schemas import WorkflowExecuteRequest
@@ -143,8 +144,10 @@ class TaskQueue:
         workflow_id = payload["workflow_id"]
         input_data = payload.get("input_data", {})
 
+        env_vars = dict(os.environ)
+
         async with get_db_context() as db:
-            executor = AgentExecutor(db, event_callback=self._publish_event)
+            executor = AgentExecutor(db, event_callback=self._publish_event, env_vars=env_vars)
             result = await executor.execute_workflow(workflow_id, input_data)
             return result
 

@@ -185,7 +185,7 @@ def load_provider_from_agent(
     
     if env_vars:
         for env_key, env_val in env_vars.items():
-            if env_key.upper().startswith(f"{prefix}_") or env_key.upper() == f"{prefix}_API_KEY":
+            if env_key.upper().startswith(f"{prefix.upper()}_") or env_key.upper() == f"{prefix.upper()}_API_KEY":
                 config_key = env_key[len(prefix) + 1:].lower()
                 if config_key == "api_key":
                     merged["api_key"] = env_val

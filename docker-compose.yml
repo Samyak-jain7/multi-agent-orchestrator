@@ -8,24 +8,17 @@ services:
     container_name: orchestrator-backend
     ports:
       - "${PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
     environment:
       # Database
       - DATABASE_URL=sqlite+aiosqlite:///./data/orchestrator.db
-      # LLM Providers
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
-      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
-      # Default LLM
-      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-minimax}
-      - DEFAULT_MODEL_NAME=${DEFAULT_MODEL_NAME:-MiniMax-M2.7}
+      # LLM Providers (values from env_file)
       # Server
       - HOST=0.0.0.0
       - PORT=${PORT:-8000}
       # URLs
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      # Security
-      - APP_API_KEY=${APP_API_KEY:-}
       # Execution
       - MAX_CONCURRENT_TASKS=${MAX_CONCURRENT_TASKS:-10}
       - TASK_TIMEOUT_SECONDS=${TASK_TIMEOUT_SECONDS:-300}
