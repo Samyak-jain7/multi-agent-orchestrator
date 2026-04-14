@@ -111,7 +111,7 @@ else:
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
     """Optional API key authentication for all /api/* endpoints."""
-    allowed_paths = {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+    allowed_paths = {"/", "/health", "/ready", "/docs", "/redoc", "/openapi.json"}
     if request.url.path in allowed_paths:
         return await call_next(request)
 

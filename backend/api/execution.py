@@ -24,7 +24,7 @@ from schemas import (
     ExecutionLogResponse,
     ExecutionEvent,
 )
-from agents.queue import task_queue
+from agents import queue as agent_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/execution", tags=["execution"])
@@ -43,7 +43,7 @@ async def stream_task_events(task_id: str, request: Request):
         async def callback(event: dict):
             await queue.put(event)
 
-        task_queue.subscribe(subscriber_id, callback)
+        agent_queue.task_queue.subscribe(subscriber_id, callback)
 
         try:
             while True:
@@ -72,7 +72,7 @@ async def stream_task_events(task_id: str, request: Request):
                     break
 
         finally:
-            task_queue.unsubscribe(subscriber_id)
+            agent_queue.task_queue.unsubscribe(subscriber_id)
 
     return StreamingResponse(
         event_generator(),
@@ -100,7 +100,7 @@ async def stream_workflow_events(workflow_id: str, request: Request):
             if event.get("workflow_id") == workflow_id or event.get("task_id"):
                 await queue.put(event)
 
-        task_queue.subscribe(subscriber_id, callback)
+        agent_queue.task_queue.subscribe(subscriber_id, callback)
 
         try:
             last_event_time = datetime.utcnow()
@@ -124,7 +124,7 @@ async def stream_workflow_events(workflow_id: str, request: Request):
                     break
 
         finally:
-            task_queue.unsubscribe(subscriber_id)
+            agent_queue.task_queue.unsubscribe(subscriber_id)
 
     return StreamingResponse(
         event_generator(),
@@ -138,18 +138,15 @@ async def stream_workflow_events(workflow_id: str, request: Request):
 
 
 @router.get("/task/{task_id}/status")
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     """Get the current status of an in-queue or completed task."""
-    task = task_queue.get_task(task_id)
+    task = agent_queue.task_queue.get_task(task_id)
 
     if not task:
         # Not in queue – try to find it in DB
-        from core.database import get_db_context
-
-        async with get_db_context() as db:
-            stmt = select(TaskModel).where(TaskModel.id == task_id)
-            result = await db.execute(stmt)
-            db_task = result.scalar_one_or_none()
+        stmt = select(TaskModel).where(TaskModel.id == task_id)
+        result = await db.execute(stmt)
+        db_task = result.scalar_one_or_none()
 
         if not db_task:
             logger.warning(f"Task status – not found: {task_id}")
@@ -185,7 +182,7 @@ async def get_task_events(
     after_index: int = Query(default=0, ge=0),
 ):
     """Retrieve stored events for a task after a given index."""
-    events = await task_queue.get_task_events(task_id, after_index)
+    events = await agent_queue.task_queue.get_task_events(task_id, after_index)
     return {"events": events, "count": len(events)}
 
 

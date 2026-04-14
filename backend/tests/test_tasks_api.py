@@ -39,7 +39,6 @@ class TestTasksCreate:
             json={
                 "workflow_id": sample_workflow.id,
                 "agent_id": sample_agent.id,
-                "title": "Missing Title Field",
                 # Missing title intentionally
             },
         )
@@ -88,11 +87,16 @@ class TestTasksList:
     async def test_list_tasks_filter_by_workflow_id(
         self, client: AsyncClient, sample_task, db_session, sample_agent
     ):
-        from models.execution import TaskModel
+        from models.execution import TaskModel, WorkflowModel
 
         # Second task with different workflow
+        wf2 = WorkflowModel(name="Second Workflow")
+        db_session.add(wf2)
+        await db_session.commit()
+        await db_session.refresh(wf2)
+
         task2 = TaskModel(
-            workflow_id="other-workflow-id",
+            workflow_id=wf2.id,
             agent_id=sample_agent.id,
             title="Task for Other Workflow",
             status="pending",
@@ -118,6 +122,8 @@ class TestTasksList:
         sample_agent,
         status_filter: str,
     ):
+        from models.execution import TaskModel
+
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,

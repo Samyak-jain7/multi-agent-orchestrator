@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float
+from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
@@ -29,8 +30,8 @@ class TaskModel(Base):
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    workflow_id = Column(String, nullable=False, index=True)
-    agent_id = Column(String, nullable=False, index=True)
+    workflow_id = Column(String, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="SET NULL"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     input_data = Column(JSON, nullable=True, default=dict)
@@ -65,9 +66,9 @@ class ExecutionLogModel(Base):
     __tablename__ = "execution_logs"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    workflow_id = Column(String, nullable=False, index=True)
+    workflow_id = Column(String, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True)
     task_id = Column(String, nullable=True, index=True)
-    agent_id = Column(String, nullable=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     event_type = Column(String, nullable=False)
     message = Column(Text, nullable=True)
     meta_data = Column(JSON, nullable=True)

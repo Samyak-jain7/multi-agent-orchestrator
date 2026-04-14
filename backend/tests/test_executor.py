@@ -258,5 +258,6 @@ class TestExecutorBuildGraph:
         graph = executor.build_graph()
 
         assert graph is not None
-        # Should be callable (compiled graph)
-        assert callable(graph)
+        # CompiledStateGraph has .invoke() method for execution
+        from langgraph.graph.state import CompiledStateGraph
+        assert isinstance(graph, CompiledStateGraph)

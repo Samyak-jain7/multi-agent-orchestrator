@@ -39,9 +39,7 @@ class TestQueueEnqueue:
         queue = TaskQueue(max_concurrent=2)
         await queue.start()
         try:
-            ids = await asyncio.gather(
-                queue.enqueue("agent_task", {"n": i}) for i in range(3)
-            )
+            ids = await asyncio.gather(*[queue.enqueue("agent_task", {"n": i}) for i in range(3)])
             assert len(set(ids)) == 3
         finally:
             await queue.stop()
@@ -230,9 +228,7 @@ class TestQueueGetTasks:
         queue = TaskQueue(max_concurrent=2)
         await queue.start()
         try:
-            await asyncio.gather(
-                queue.enqueue("agent_task", {"i": i}) for i in range(3)
-            )
+            await asyncio.gather(*[queue.enqueue("agent_task", {"i": i}) for i in range(3)])
             tasks = queue.get_tasks()
             assert len(tasks) == 3
         finally:

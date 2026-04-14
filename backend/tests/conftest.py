@@ -3,9 +3,12 @@ pytest fixtures: in-memory SQLite, AsyncClient, sample data, mocked LLM.
 """
 import asyncio
 import os
+import tempfile
 from datetime import datetime
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy import text, event
+from sqlalchemy.pool import StaticPool
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -19,18 +22,30 @@ from models.execution import Base
 # ---------------------------------------------------------------------------
 # Shared in-memory SQLite with file backing (so all connections share schema)
 # ---------------------------------------------------------------------------
+# Temp file for test DB — avoids SQLite in-memory shared-cache issues with aiosqlite
+_TEST_DB_PATH = tempfile.mktemp(suffix=".db")
+
 TEST_ENGINE = create_async_engine(
-    "sqlite+aiosqlite:///file::memory:?cache=shared&uri=true",
+    f"sqlite+aiosqlite:///{_TEST_DB_PATH}",
     echo=False,
-    connect_args={"check_same_thread": False, "uri": True},
+    connect_args={"check_same_thread": False},
+    # Use StaticPool so all connections reuse the same underlying connection
+    poolclass=StaticPool,
 )
+
+
+# Enable FK enforcement for every new connection
+@event.listens_for(TEST_ENGINE.sync_engine, "connect")
+def _set_fk_pragma(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.close()
 
 TEST_SESSION_FACTORY = async_sessionmaker(
     TEST_ENGINE,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
-    autocommit=False,
 )
 
 # Create schema once at module load
@@ -49,17 +64,19 @@ async def _ensure_tables():
 asyncio.get_event_loop().run_until_complete(_ensure_tables())
 
 
-# ---------------------------------------------------------------------------
-# Per-test cleanup: truncate all data (keep schema)
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Per-test cleanup: delete all rows from every table (no DDL, avoids SQLite issues)
+# -----------------------------------------------------------------------------
 @pytest.fixture(scope="function", autouse=True)
 async def _cleanup_db():
-    """Delete all rows from every table after each test."""
+    """Delete all rows from every table after each test.
+    Uses DELETE FROM (not DROP TABLE) to avoid SQLite DDL auto-commit issues.
+    """
     yield
     async with TEST_ENGINE.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    async with TEST_ENGINE.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # Delete in reverse dependency order to avoid FK violations
+        for table_name in reversed(Base.metadata.tables.keys()):
+            await conn.execute(text(f"DELETE FROM {table_name}"))
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +101,11 @@ async def app():
             yield session
 
     fastapi_app.dependency_overrides[get_db] = _override
+
+    # Ensure task_queue is marked running for test context
+    from agents.queue import task_queue
+    task_queue._running = True
+
     yield fastapi_app
     fastapi_app.dependency_overrides.clear()
 
@@ -168,11 +190,11 @@ async def sample_workflow(db_session) -> dict:
 
 
 @pytest.fixture
-async def sample_task(db_session, sample_agent) -> dict:
+async def sample_task(db_session, sample_agent, sample_workflow) -> dict:
     from models.execution import TaskModel
 
     task = TaskModel(
-        workflow_id="test-workflow-id",
+        workflow_id=sample_workflow.id,
         agent_id=sample_agent.id,
         title="Sample Task",
         description="A sample task",

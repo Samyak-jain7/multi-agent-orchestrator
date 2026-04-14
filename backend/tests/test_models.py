@@ -120,7 +120,7 @@ class TestWorkflowModel:
         assert wf.created_at is not None
 
     async def test_workflow_default_agent_ids_empty_list(self, db_session: AsyncSession):
-        wf = WorkflowModel(name="Empty Agents WF", system_prompt="Prompt")
+        wf = WorkflowModel(name="Empty Agents WF")
         db_session.add(wf)
         await db_session.commit()
         await db_session.refresh(wf)
@@ -167,9 +167,9 @@ class TestWorkflowModel:
 class TestTaskModel:
     """Task model tests."""
 
-    async def test_task_create(self, db_session: AsyncSession, sample_agent):
+    async def test_task_create(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Test Task",
             description="A test task",
@@ -189,10 +189,10 @@ class TestTaskModel:
 
     @pytest.mark.parametrize("status", ["pending", "running", "completed", "failed", "cancelled"])
     async def test_task_status_transitions(
-        self, db_session: AsyncSession, sample_agent, status: str
+        self, db_session: AsyncSession, sample_agent, sample_workflow, status: str
     ):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title=f"Task {status}",
             status=status,
@@ -205,10 +205,10 @@ class TestTaskModel:
         assert task.status == status
 
     async def test_task_started_at_set_when_running(
-        self, db_session: AsyncSession, sample_agent
+        self, db_session: AsyncSession, sample_agent, sample_workflow
     ):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Running Task",
             status="pending",
@@ -224,10 +224,10 @@ class TestTaskModel:
         assert task.started_at is not None
 
     async def test_task_completed_at_set_on_completion(
-        self, db_session: AsyncSession, sample_agent
+        self, db_session: AsyncSession, sample_agent, sample_workflow
     ):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Completed Task",
             status="running",
@@ -245,10 +245,10 @@ class TestTaskModel:
         assert task.output == {"result": "done"}
 
     async def test_task_retry_count_default_zero(
-        self, db_session: AsyncSession, sample_agent
+        self, db_session: AsyncSession, sample_agent, sample_workflow
     ):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Retry Task",
             status="failed",
@@ -260,10 +260,10 @@ class TestTaskModel:
         assert task.retry_count == 0
 
     async def test_task_increments_retry_count(
-        self, db_session: AsyncSession, sample_agent
+        self, db_session: AsyncSession, sample_agent, sample_workflow
     ):
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Increment Retry",
             status="failed",
@@ -279,10 +279,10 @@ class TestTaskModel:
         assert task.retry_count == 3
 
     async def test_task_workflow_id_indexed(
-        self, db_session: AsyncSession, sample_agent
+        self, db_session: AsyncSession, sample_agent, sample_workflow
     ):
         """workflow_id should be stored and queryable."""
-        wf_id = "indexed-workflow-id"
+        wf_id = sample_workflow.id
         task = TaskModel(
             workflow_id=wf_id,
             agent_id=sample_agent.id,
@@ -324,10 +324,10 @@ class TestTimestamps:
         assert wf.created_at <= after
         assert wf.updated_at is not None
 
-    async def test_task_timestamps_auto_populated(self, db_session: AsyncSession, sample_agent):
+    async def test_task_timestamps_auto_populated(self, db_session: AsyncSession, sample_agent, sample_workflow):
         before = datetime.utcnow()
         task = TaskModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
             title="Timestamp Task",
             status="pending",
@@ -355,11 +355,10 @@ class TestTimestamps:
 class TestExecutionLogModel:
     """ExecutionLogModel tests."""
 
-    async def test_execution_log_create(self, db_session: AsyncSession):
+    async def test_execution_log_create(self, db_session: AsyncSession, sample_workflow):
         log = ExecutionLogModel(
-            workflow_id="test-workflow",
+            workflow_id=sample_workflow.id,
             task_id="test-task",
-            agent_id="test-agent",
             event_type="task_started",
             message="Task started",
             meta_data={"step": 1},
@@ -373,8 +372,8 @@ class TestExecutionLogModel:
         assert log.timestamp is not None
         assert log.meta_data["step"] == 1
 
-    async def test_execution_log_workflow_id_indexed(self, db_session: AsyncSession):
-        wf_id = "log-workflow-id"
+    async def test_execution_log_workflow_id_indexed(self, db_session: AsyncSession, sample_workflow):
+        wf_id = sample_workflow.id
         log = ExecutionLogModel(
             workflow_id=wf_id,
             event_type="test_event",
