@@ -63,14 +63,23 @@ jobs:
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Start dev server
-        run: npm run dev &>/dev/null &
+      - name: Start backend
+        run: |
+          cd ../backend
+          pip install -r requirements.txt
+          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
           APP_API_KEY: ""
 
-      - name: Wait for dev server
-        run: sleep 10 && curl -s --max-time 5 http://localhost:3000 > /dev/null || true
+      - name: Start frontend
+        run: |
+          npm run dev &
+
+      - name: Wait for servers
+        run: |
+          sleep 15
+          curl -s --max-time 5 http://localhost:8000/health || exit 1
+          curl -s --max-time 5 http://localhost:3000 || exit 1
 
       - name: Run Playwright E2E tests
         run: npx playwright test --project=chromium

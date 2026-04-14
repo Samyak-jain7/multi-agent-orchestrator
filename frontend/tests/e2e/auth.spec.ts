@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures';
+import { test, expect } from './fixtures';
 
 test.describe('Authentication', () => {
   test('API returns 401 without X-API-Key header', async ({ request }) => {

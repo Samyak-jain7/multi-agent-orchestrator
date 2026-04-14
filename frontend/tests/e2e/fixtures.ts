@@ -1,7 +1,7 @@
-import { test as base, expect, Page, APIRequestContext } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 
 export async function createTestAgent(
-  request: APIRequestContext,
+  request: any,
   options: {
     name?: string;
     provider?: string;
@@ -28,7 +28,7 @@ export async function createTestAgent(
 }
 
 export async function createTestWorkflow(
-  request: APIRequestContext,
+  request: any,
   agentId?: string
 ) {
   const response = await request.post('http://localhost:8000/api/v1/workflows', {
@@ -46,7 +46,7 @@ export async function createTestWorkflow(
   return response.json();
 }
 
-export async function cleanupTestData(request: APIRequestContext) {
+export async function cleanupTestData(request: any) {
   try {
     const agentsResponse = await request.get('http://localhost:8000/api/v1/agents');
     if (agentsResponse.ok()) {
