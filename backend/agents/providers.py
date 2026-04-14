@@ -25,7 +25,11 @@ class LLMProviderStrategy(ABC):
         pass
 
     @abstractmethod
-    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> BaseMessage:
         """Send messages to LLM and return response."""
         pass
 
@@ -67,8 +71,15 @@ class OpenAIProvider(LLMProviderStrategy):
             base_url=config.get("base_url"),
         )
 
-    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> BaseMessage:
         client = self.get_client(self._config)
+        if tools:
+            bound = client.bind_tools(tools)
+            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -90,8 +101,15 @@ class AnthropicProvider(LLMProviderStrategy):
             base_url=config.get("base_url"),
         )
 
-    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> BaseMessage:
         client = self.get_client(self._config)
+        if tools:
+            bound = client.bind_tools(tools)
+            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -116,8 +134,15 @@ class MiniMaxProvider(LLMProviderStrategy):
             base_url=config.get("base_url", self.DEFAULT_BASE_URL),
         )
 
-    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> BaseMessage:
         client = self.get_client(self._config)
+        if tools:
+            bound = client.bind_tools(tools)
+            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:

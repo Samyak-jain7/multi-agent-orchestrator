@@ -92,6 +92,8 @@ class AgentExecutor:
         return state
 
     async def _run_agent(self, agent_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        from agents.tools import execute_tool, get_all_tool_definitions
+
         stmt = select(AgentModel).where(AgentModel.id == agent_id)
         result = await self.db.execute(stmt)
         agent = result.scalar_one_or_none()
@@ -107,7 +109,63 @@ class AgentExecutor:
 
         user_content = self._format_input(input_data)
 
-        response = await provider.ainvoke([system_msg, HumanMessage(content=user_content)])
+        # Get tool definitions if agent has tools
+        tools = None
+        if agent.tools:
+            # agent.tools is a JSON list of tool definitions
+            try:
+                tool_defs = agent.tools if isinstance(agent.tools, list) else json.loads(agent.tools)
+                if tool_defs:
+                    tools = tool_defs
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # If no agent-specific tools, provide all available tools
+        if not tools:
+            available_tools = get_all_tool_definitions()
+            if available_tools:
+                tools = available_tools
+
+        messages = [system_msg, HumanMessage(content=user_content)]
+        max_tool_calls = 10  # Prevent infinite loops
+        tool_call_count = 0
+
+        while tool_call_count < max_tool_calls:
+            if tools:
+                response = await provider.ainvoke(messages, tools=tools)
+            else:
+                response = await provider.ainvoke(messages)
+
+            # Check if LLM made tool calls
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                tool_call_count += 1
+                # Add LLM response to messages
+                messages.append(response)
+
+                # Execute each tool call
+                for tc in response.tool_calls:
+                    tool_name = tc.get('name') or tc.get('function', {}).get('name', '')
+                    tool_args = tc.get('args') or tc.get('function', {}).get('arguments', {})
+
+                    # Execute the tool
+                    if isinstance(tool_args, str):
+                        try:
+                            tool_args = json.loads(tool_args)
+                        except json.JSONDecodeError:
+                            tool_args = {}
+
+                    tool_result = await execute_tool(tool_name, **tool_args)
+
+                    # Add tool result as a tool message
+                    from langchain_core.messages import ToolMessage
+                    tool_msg = ToolMessage(
+                        content=json.dumps(tool_result),
+                        tool_call_id=tc.get('id', '')
+                    )
+                    messages.append(tool_msg)
+            else:
+                # No tool calls - this is the final response
+                break
 
         output_text = response.content if hasattr(response, 'content') else str(response)
 
