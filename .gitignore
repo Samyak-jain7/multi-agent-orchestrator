@@ -46,3 +46,13 @@ Thumbs.db
 # Misc
 *.bak
 .cache/
+
+# Test results
+test-results/
+frontend/test-results/
+
+# Playwright
+.playwright-mcp/
+
+# Screenshots
+*.png

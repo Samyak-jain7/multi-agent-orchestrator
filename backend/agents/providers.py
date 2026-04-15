@@ -95,7 +95,7 @@ class AnthropicProvider(LLMProviderStrategy):
 
     def get_client(self, config: Dict[str, Any]) -> ChatAnthropic:
         return ChatAnthropic(
-            model=config.get("model_name", "claude-3-5-sonnet-20241022"),
+            model=config.get("model_name", "claude-sonnet-4-6"),
             temperature=config.get("temperature", 0.7),
             api_key=config.get("api_key"),
             base_url=config.get("base_url"),
