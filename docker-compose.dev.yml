@@ -1,0 +1,78 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: orchestrator-backend-dev
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    ports:
+    - 8000:8000
+    environment:
+    - DATABASE_URL=sqlite+aiosqlite:////app/data/orchestrator.db
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+    - MINIMAX_BASE_URL=https://api.minimax.io/v1
+    - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-minimax}
+      - APP_API_KEY=${APP_API_KEY:-your-secure-app-api-key-here}
+    - DEFAULT_MODEL_NAME=${DEFAULT_MODEL_NAME:-MiniMax-M2.7}
+    - REDIS_URL=${REDIS_URL:-}
+    - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+    - ENV=${ENV:-development}
+    volumes:
+    - ./backend:/app
+    - ./backend/data:/app/data
+    depends_on:
+    - redis
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+    - orchestrator-dev
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: orchestrator-frontend-dev
+    command: npm run dev -- --port 3000
+    ports:
+    - 3000:3000
+    environment:
+    - NODE_ENV=development
+    - API_BACKEND_URL=http://backend:8000
+    - API_KEY=${APP_API_KEY:-your-secure-app-api-key-here}
+    - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+    - ./frontend:/app
+    - /app/node_modules
+    - /app/.next
+    depends_on:
+    - backend
+    networks:
+    - orchestrator-dev
+  redis:
+    image: redis:7-alpine
+    container_name: orchestrator-redis-dev
+    ports:
+    - 6379:6379
+    volumes:
+    - redis-dev-data:/data
+    networks:
+    - orchestrator-dev
+volumes:
+  backend-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+networks:
+  orchestrator-dev:
+    driver: bridge

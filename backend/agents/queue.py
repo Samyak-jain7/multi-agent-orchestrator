@@ -136,15 +136,22 @@ class TaskQueue:
         payload: Dict[str, Any],
         task: QueuedTask
     ) -> Dict[str, Any]:
-        from agents.executor import AgentExecutor
+        from agents.executor_v1 import AgentExecutor as AgentExecutorV1
+        from agents.executor_v2 import SupervisorExecutor
         from core.database import get_db_context
         from schemas import WorkflowExecuteRequest
 
         workflow_id = payload["workflow_id"]
         input_data = payload.get("input_data", {})
+        use_executor_v2 = payload.get("use_executor_v2", False)
 
         async with get_db_context() as db:
-            executor = AgentExecutor(db, event_callback=self._publish_event)
+            if use_executor_v2:
+                # Use the new SupervisorExecutor with LangGraph
+                executor = SupervisorExecutor(db, event_callback=self._publish_event)
+            else:
+                # Use legacy AgentExecutor
+                executor = AgentExecutorV1(db, event_callback=self._publish_event)
             result = await executor.execute_workflow(workflow_id, input_data)
             return result
 

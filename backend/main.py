@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from core.database import init_db, close_db
 from agents.queue import task_queue
-from api import agents_router, workflows_router, tasks_router, execution_router
+from api import agents_router, workflows_router, tasks_router, execution_router, auth_router
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ else:
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
     """Optional API key authentication for all /api/* endpoints."""
-    allowed_paths = {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+    allowed_paths = {"/", "/health", "/api/v1/health", "/docs", "/redoc", "/openapi.json"}
     if request.url.path in allowed_paths:
         return await call_next(request)
 
@@ -186,6 +186,7 @@ app.include_router(agents_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(execution_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 
 
 # ---------------------------------------------------------------------------

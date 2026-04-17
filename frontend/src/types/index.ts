@@ -24,6 +24,10 @@ export interface Agent {
   status: AgentStatus;
   created_at: string;
   updated_at: string;
+  // Extended fields for frontend
+  tool_ids?: string[];
+  memory_enabled?: boolean;
+  max_iterations?: number;
 }
 
 export interface Task {
@@ -56,6 +60,30 @@ export interface Workflow {
   started_at: string | null;
   completed_at: string | null;
   output: Record<string, unknown> | null;
+  // Extended fields for frontend
+  workflow_definition?: WorkflowDefinition;
+  memory_enabled?: boolean;
+}
+
+export interface WorkflowDefinition {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  max_iterations: number;
+}
+
+export interface WorkflowNode {
+  id: string;
+  type: 'supervisor' | 'agent';
+  agent_id?: string;
+  tools?: string[];
+  config?: Record<string, any>;
+  position?: { x: number; y: number };
+}
+
+export interface WorkflowEdge {
+  from: string;
+  to: string;
+  condition?: string;
 }
 
 export interface DashboardStats {

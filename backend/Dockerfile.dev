@@ -1,0 +1,28 @@
+# backend/Dockerfile.dev
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better layer caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Composio for agent tools
+RUN pip install --no-cache-dir composio-core composio-langchain
+
+RUN pip install --no-cache-dir "pydantic[email]>=2.6.1"
+# Re-pin langchain dependencies that composio overwrote
+RUN pip install --no-cache-dir 'langchain-core>=0.2.27,<0.3.0' 'langchain-openai>=0.1.7' 'langchain-anthropic>=0.1.15'
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
