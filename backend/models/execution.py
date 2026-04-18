@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -9,6 +9,30 @@ Base = declarative_base()
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+
+class OrganizationModel(Base):
+    __tablename__ = "organizations"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, nullable=False)
+    plan = Column(String, nullable=False, default="free")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_api_key = Column(String, nullable=True)
+    org_id = Column(String, ForeignKey("organizations.id"), nullable=True)
+    role = Column(String, nullable=False, default="member")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AgentModel(Base):
