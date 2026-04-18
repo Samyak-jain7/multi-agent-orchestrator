@@ -4,8 +4,8 @@ Concurrent execution tests.
 - Tests that MAX_CONCURRENT_TASKS is respected
 - Tests task timeout behavior
 """
-import asyncio
 
+import asyncio
 import time
 
 import pytest

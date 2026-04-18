@@ -2,8 +2,8 @@
 Full end-to-end integration tests using REAL aiosqlite in-memory DB.
 Only LLM calls are mocked. No mocking of database operations.
 """
-import asyncio
 
+import asyncio
 
 import pytest
 

@@ -3,8 +3,8 @@ Tests for agents/queue.py.
 queue.py: enqueue→in queue, worker picks up, max concurrency (mock sleep),
 pub/sub state transitions, cancellation.
 """
-import asyncio
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
