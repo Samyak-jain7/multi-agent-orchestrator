@@ -92,7 +92,9 @@ export async function createTestTask(
 export async function cleanupTestData(request: APIRequestContext) {
   const headers = getAuthHeaders();
 
+  // Clean up in parallel
   await Promise.all([
+    // Clean up agents
     (async () => {
       try {
         const response = await request.get(`${API_BASE}/agents`, { headers });
@@ -109,6 +111,7 @@ export async function cleanupTestData(request: APIRequestContext) {
       } catch {}
     })(),
 
+    // Clean up workflows
     (async () => {
       try {
         const response = await request.get(`${API_BASE}/workflows`, { headers });
@@ -125,6 +128,7 @@ export async function cleanupTestData(request: APIRequestContext) {
       } catch {}
     })(),
 
+    // Clean up tasks
     (async () => {
       try {
         const response = await request.get(`${API_BASE}/tasks`, { headers });

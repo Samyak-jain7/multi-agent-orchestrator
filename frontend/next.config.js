@@ -2,18 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  eslint: {
-    // Don't fail build due to lint errors (CI runs lint separately)
-    ignoreDuringBuilds: true,
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://backend:8000/api/:path*',
-      },
-    ];
-  },
+  // Note: API proxy with auth is handled by src/app/api/[...path]/route.ts
+  // Do NOT add rewrites here as they bypass the route handler
 };
 
 module.exports = nextConfig;

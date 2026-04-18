@@ -4,7 +4,7 @@ A platform to visually configure and run multiple AI agents to complete complex 
 
 ## What It Does
 
-- **Agent Management** — Create agents with custom system prompts, model providers (OpenAI/Anthropic/MiniMax), and tools
+- **Agent Management** — Create agents with custom system prompts, model providers (OpenAI/Anthropic), and tools
 - **Workflow Orchestration** — Design workflows that coordinate multiple agents together
 - **Task Execution** — Execute tasks with dependency management and priority queueing
 - **Real-time Streaming** — Monitor execution progress via SSE event streams
@@ -50,7 +50,7 @@ A platform to visually configure and run multiple AI agents to complete complex 
 - Docker & Docker Compose **v2+**
 - Python **3.11+** (for local backend development)
 - Node.js **20+** (for local frontend development)
-- OpenAI, Anthropic, and/or MiniMax API keys (at least one required to run agents)
+- OpenAI and/or Anthropic API keys
 
 ### Docker Compose (Recommended)
 
@@ -94,6 +94,71 @@ npm run dev
 
 ---
 
+## Testing
+
+### Backend Tests (pytest)
+
+```bash
+cd backend
+pip install pytest pytest-asyncio pytest-cov httpx
+pytest backend/tests/ --cov=backend --cov-report=xml --cov-fail-under=70 -v
+```
+
+Tests use a **real aiosqlite in-memory database** — no mocking of database operations. Only LLM provider calls are mocked.
+
+- `backend/tests/integration/test_full_flow.py` — 14 end-to-end tests: agent CRUD → workflow → execute → task completion, cascade delete, retry, SSE streams, execution stats/logs.
+- `backend/tests/integration/test_concurrent_execution.py` — 9 tests: concurrent task limits, task timeout behavior, dependency ordering, queue FIFO, status transitions.
+
+### Frontend Tests (Jest + React Testing Library)
+
+```bash
+cd frontend
+npm run test
+```
+
+### End-to-End Tests (Playwright)
+
+```bash
+# Start backend and frontend first
+cd backend && uvicorn main:app --port 8000 &
+cd frontend && npm run build && npm run start &
+
+# Run Playwright tests
+npx playwright test --project=chromium
+```
+
+> **Note:** Requires browsers to be installed — run `npx playwright install --with-deps chromium` first.
+
+### Smoke Test (Bash)
+
+A lightweight health check that doesn't require the full test suite:
+
+```bash
+chmod +x tests/smoke.sh
+./tests/smoke.sh
+```
+
+This starts the backend with an in-memory DB, hits `/health` and `/ready`, creates an agent via the API, lists agents, and asserts the created agent appears in the list. Exit code 0 = pass.
+
+### Running All Tests Locally (act)
+
+To simulate the full CI pipeline locally using [Act](https://github.com/nektos/act):
+
+```bash
+# Run the full CI pipeline
+act
+
+# Run only the backend test job
+act -j test-backend
+
+# Run with live output (no sandbox)
+act --container-architecture linux/amd64
+```
+
+> **Tip:** On first run, Act will pull the GitHub Actions runner image (~2 GB). Use `act -s` to skip the artifact upload steps for faster iteration.
+
+---
+
 ## Environment Variables
 
 ### Backend (`backend/.env`)
@@ -101,20 +166,15 @@ npm run dev
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No | `sqlite+aiosqlite:///./orchestrator.db` | Async SQLite connection string |
-| `OPENAI_API_KEY` | No | — | OpenAI API key (`sk-...`) |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API key (`sk-ant-...`) |
-| `MINIMAX_API_KEY` | No | — | MiniMax API key (required for MiniMax provider) |
-| `MINIMAX_BASE_URL` | No | `https://api.minimax.io/v1` | MiniMax API base URL |
-| `DEFAULT_LLM_PROVIDER` | No | `minimax` | Default provider for new agents (`openai`, `anthropic`, or `minimax`) |
-| `DEFAULT_MODEL_NAME` | No | `MiniMax-M2.7` | Default model for new agents |
+| `OPENAI_API_KEY` | Yes* | — | OpenAI API key (`sk-...`) |
+| `ANTHROPIC_API_KEY` | Yes* | — | Anthropic API key (`sk-ant-...`) |
 | `HOST` | No | `0.0.0.0` | Server bind host |
 | `PORT` | No | `8000` | Server port |
 | `FRONTEND_URL` | No | `http://localhost:3000` | CORS-allowed frontend origin |
 | `APP_API_KEY` | No | — | If set, all `/api/*` requests require `X-API-Key` header |
 | `MAX_CONCURRENT_TASKS` | No | `10` | Maximum parallel tasks in the queue |
 | `TASK_TIMEOUT_SECONDS` | No | `300` | Timeout per task in seconds |
-| `MINIMAX_API_KEY` | No | — | MiniMax API key (required if using MiniMax agents) |
-| `MINIMAX_BASE_URL` | No | `https://api.minimax.io/v1` | MiniMax API base URL |
+| `REDIS_URL` | No | — | Redis URL for distributed deployments (optional) |
 | `LOG_LEVEL` | No | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `ENV` | No | `production` | Set to `development` to enable uvicorn reload |
 
@@ -181,7 +241,7 @@ npm run dev
 | GET | `/api/v1/execution/stream/{id}` | SSE stream for task events |
 | GET | `/api/v1/execution/stream/workflow/{id}` | SSE stream for workflow events |
 | GET | `/api/v1/execution/logs/{workflow_id}` | Get execution logs for a workflow |
-| POST | `/api/v1/execution/log?workflow_id=...&event_type=...&message=...` | Create an execution log entry (query params) |
+| POST | `/api/v1/execution/log` | Create an execution log entry |
 
 ---
 
@@ -230,7 +290,7 @@ Rules:
 2. Click **Create Agent**
 3. Fill in:
    - **Name** – descriptive name, e.g. `"Research Agent"`
-   - **Provider** – select from OpenAI, Anthropic, or MiniMax
+   - **Provider** – select from OpenAI, Anthropic, MiniMax, or Ollama
    - **Model** – dropdown auto-updates based on selected provider (recommended models shown with descriptions)
    - **System Prompt** – the agent's instructions (see System Prompt Engineering above)
 4. Click **Create**
@@ -270,9 +330,8 @@ When executing a workflow, **Input Data** is passed as JSON to every agent in th
 
 1. Navigate to **Workflows** → find your workflow → click **Run**
 2. Provide input data as JSON, e.g. `{"topic": "AI trends"}`
-3. Optionally provide `task_overrides` to override `input_data` for specific tasks
-4. Click **Execute**
-5. Monitor progress in the **Events** tab (real-time SSE stream)
+3. Click **Execute**
+4. Monitor progress in the **Events** tab (real-time SSE stream)
 
 ### Where to Find Output
 
@@ -289,11 +348,14 @@ After a workflow completes, output is stored at two levels:
 **Sample task output (JSON):**
 ```json
 {
-  "result": "The market research analysis is complete. Key findings:\n\n**Topic:** AI coding assistants in 2024\n\n**Key Players:** GitHub Copilot, Cursor AI, Replit Agent...\n\n**Market Size:** $4.5B globally (Grand View Research), growing at 28% CAGR..."
+  "result": "The market research analysis is complete. Key findings:\n\n**Topic:** AI coding assistants in 2024\n\n**Key Players:** GitHub Copilot, Cursor AI, Replit Agent...\n\n**Market Size:** $4.5B globally (Grand View Research), growing at 28% CAGR...",
+  "metadata": {
+    "model": "MiniMax-M2.7",
+    "tokens_used": 1842,
+    "latency_ms": 2340
+  }
 }
 ```
-
-> **Note:** Task output is whatever the agent returns and is not enforced by the system. Structure your output through the agent's system prompt. The example above reflects what a well-prompted market research agent might produce.
 
 ### Agent Best Practices
 
@@ -305,13 +367,22 @@ After a workflow completes, output is stored at two levels:
 
 ### Model Recommendations
 
-| Provider | Best For | Default Model | Current Models |
-|----------|----------|---------------|----------------|
-| **OpenAI** | General purpose, complex reasoning | `gpt-4o` | `gpt-4o`, `gpt-4o-mini`, `o1`, `o3` |
-| **Anthropic** | Long context, complex reasoning | `claude-opus-4-6` | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` |
-| **MiniMax** | Cost-effective, fast, agentic tasks | `MiniMax-M2.7` | `MiniMax-M2.7`, `MiniMax-M2.7-highspeed` |
+| Provider | Best For | Recommended Model |
+|----------|----------|-------------------|
+| **OpenAI** | General purpose, complex reasoning | `gpt-4o` or `gpt-4o-mini` |
+| **Anthropic** | Long context, complex reasoning | `claude-3-5-sonnet-20241022` or `claude-3-opus-20240229` |
+| **MiniMax** | Cost-effective, fast, 204k context | `MiniMax-M2.7` or `MiniMax-M2.7-highspeed` |
+| **Ollama** | Local/self-hosted models | `llama3.1`, `mistral`, `codellama` |
 
-MiniMax is set as the default provider for new agents. The model field accepts any valid model name for the provider — these defaults are what new agents start with.
+OpenAI is set as the default provider for new agents.
+
+### Workflow Execution Flow
+
+1. **Create agents** (e.g., Research Agent, Writer Agent)
+2. **Create workflow** → assign agents in order
+3. **Execute workflow** → pass global input JSON
+4. **Monitor** → Events tab for real-time streaming
+5. **Inspect results** → Tasks tab or workflow detail modal
 
 ---
 
@@ -367,7 +438,7 @@ docker-compose -f docker-compose.yml up --build -d
 ### Scale
 
 ```bash
-# Scale backend instances (requires shared filesystem for orchestrator.db)
+# Scale backend instances (requires shared filesystem or Redis)
 docker-compose up -d --scale backend=3
 
 # Scale frontend CDN (use a separate CDN in front of the service)
