@@ -1,149 +1,141 @@
 """
-conftest.py — Pytest fixtures and test environment setup.
+pytest fixtures: in-memory SQLite, AsyncClient, sample data, mocked LLM.
 """
 import asyncio
 import os
-import sys
-from typing import AsyncGenerator, Generator
+import tempfile
+from datetime import datetime
+from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy import text, event
+from sqlalchemy.pool import StaticPool
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-# Ensure backend is on path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+os.environ["APP_API_KEY"] = "test-api-key"
+os.environ["LOG_LEVEL"] = "DEBUG"
+
+from models.execution import Base
 
 # ---------------------------------------------------------------------------
-# Environment — set BEFORE importing app
+# Shared in-memory SQLite with file backing (so all connections share schema)
 # ---------------------------------------------------------------------------
-TEST_API_KEY = "test-secret-api-key-12345"
-os.environ["APP_API_KEY"] = TEST_API_KEY
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+# Temp file for test DB — avoids SQLite in-memory shared-cache issues with aiosqlite
+_TEST_DB_PATH = tempfile.mktemp(suffix=".db")
 
-# ---------------------------------------------------------------------------
-# In-memory async SQLite engine
-# ---------------------------------------------------------------------------
-_test_engine: AsyncEngine = create_async_engine(
-    "sqlite+aiosqlite:///:memory:",
+TEST_ENGINE = create_async_engine(
+    f"sqlite+aiosqlite:///{_TEST_DB_PATH}",
     echo=False,
+    connect_args={"check_same_thread": False},
+    # Use StaticPool so all connections reuse the same underlying connection
     poolclass=StaticPool,
-    connect_args={"check_same_thread": False}
 )
 
-_test_session_factory = async_sessionmaker(
-    _test_engine,
+
+# Enable FK enforcement for every new connection
+@event.listens_for(TEST_ENGINE.sync_engine, "connect")
+def _set_fk_pragma(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.close()
+
+TEST_SESSION_FACTORY = async_sessionmaker(
+    TEST_ENGINE,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
-    autocommit=False,
 )
 
-# Patch the app's database module globals
-from core import database
-database.engine = _test_engine
-database.AsyncSessionLocal = _test_session_factory
+# Create schema once at module load
+import inspect
+_sentinel = object()
+_last_create = [_sentinel]
 
 
+async def _ensure_tables():
+    """Create all tables. Idempotent – only runs once."""
+    async with TEST_ENGINE.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+# Run table creation now
+asyncio.get_event_loop().run_until_complete(_ensure_tables())
+
+
+# -----------------------------------------------------------------------------
+# Per-test cleanup: delete all rows from every table (no DDL, avoids SQLite issues)
+# -----------------------------------------------------------------------------
+@pytest.fixture(scope="function", autouse=True)
+async def _cleanup_db():
+    """Delete all rows from every table after each test.
+    Uses DELETE FROM (not DROP TABLE) to avoid SQLite DDL auto-commit issues.
+    """
+    yield
+    async with TEST_ENGINE.begin() as conn:
+        # Delete in reverse dependency order to avoid FK violations
+        for table_name in reversed(Base.metadata.tables.keys()):
+            await conn.execute(text(f"DELETE FROM {table_name}"))
+
+
+# ---------------------------------------------------------------------------
+# DB session fixture
+# ---------------------------------------------------------------------------
 @pytest.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """A fresh async DB session per test — all changes auto-rollback."""
-    from models.execution import Base
-
-    # Create tables in-memory
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with _test_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
-
-    # Drop tables after each test
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-@pytest.fixture(scope="function")
-async def db_session_without_commit() -> AsyncGenerator[AsyncSession, None]:
-    """DB session without auto-commit for tests that need explicit control."""
-    from models.execution import Base
-
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with _test_session_factory() as session:
+    async with TEST_SESSION_FACTORY() as session:
         yield session
 
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
 
 # ---------------------------------------------------------------------------
-# Patch get_db to use test session
+# App + client fixtures
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="function")
-async def app(db_session: AsyncSession):
-    """FastAPI app with patched database dependency."""
+async def app():
+    from main import app as fastapi_app
     from core.database import get_db
 
-    async def _override_get_db():
-        yield db_session
+    async def _override():
+        async with TEST_SESSION_FACTORY() as session:
+            yield session
 
-    # Import app after env vars are set
-    from main import app as fastapi_app
+    fastapi_app.dependency_overrides[get_db] = _override
 
-    fastapi_app.dependency_overrides[get_db] = _override_get_db
+    # Ensure task_queue is marked running for test context
+    from agents.queue import task_queue
+    task_queue._running = True
 
     yield fastapi_app
-
     fastapi_app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="function")
 async def client(app) -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client for the FastAPI app."""
-    transport = ASGITransport(app=app)
     async with AsyncClient(
-        transport=transport,
+        transport=ASGITransport(app=app),
         base_url="http://test",
-        headers={"X-API-Key": TEST_API_KEY},
+        headers={"X-API-Key": "test-api-key"},
     ) as ac:
         yield ac
 
 
-@pytest.fixture(scope="function")
-async def unauthenticated_client(app) -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client without API key header."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-    ) as ac:
-        yield ac
+# ---------------------------------------------------------------------------
+# Auth header fixtures
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def auth_headers() -> dict:
+    return {"X-API-Key": "test-api-key"}
 
 
-@pytest.fixture(scope="function")
-async def wrong_auth_client(app) -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client with wrong API key header."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-        headers={"X-API-Key": "wrong-key-xyz"},
-    ) as ac:
-        yield ac
+@pytest.fixture
+def no_auth_headers() -> dict:
+    return {}
+
+
+@pytest.fixture
+def wrong_auth_headers() -> dict:
+    return {"X-API-Key": "wrong-key"}
 
 
 # ---------------------------------------------------------------------------
@@ -153,82 +145,113 @@ async def wrong_auth_client(app) -> AsyncGenerator[AsyncClient, None]:
 def sample_agent_data() -> dict:
     return {
         "name": "Test Agent",
-        "description": "A test agent for unit tests",
+        "description": "A test agent",
         "model_provider": "minimax",
         "model_name": "MiniMax-M2.7",
-        "system_prompt": "You are a helpful test agent.",
-        "tools": [{"name": "test_tool", "description": "A test tool", "parameters": {}}],
-        "config": {"temperature": 0.5},
+        "system_prompt": "You are a helpful assistant.",
+        "tools": [{"name": "web_search", "description": "Search the web", "parameters": {}}],
+        "config": {"temperature": 0.7},
     }
 
 
 @pytest.fixture
-def sample_workflow_data() -> dict:
-    return {
-        "name": "Test Workflow",
-        "description": "A test workflow",
-        "agent_ids": [],
-        "config": {},
-    }
+async def sample_agent(db_session) -> dict:
+    from models.execution import AgentModel
+
+    agent = AgentModel(
+        name="Sample Agent",
+        description="A sample agent",
+        model_provider="minimax",
+        model_name="MiniMax-M2.7",
+        system_prompt="You are a sample agent.",
+        tools=[{"name": "web_search", "description": "Search the web", "parameters": {}}],
+        config={"temperature": 0.7},
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    await db_session.refresh(agent)
+    return agent
 
 
 @pytest.fixture
-def sample_task_data() -> dict:
-    return {
-        "title": "Test Task",
-        "description": "A test task",
-        "workflow_id": "placeholder-workflow-id",
-        "agent_id": "placeholder-agent-id",
-        "input_data": {"query": "test query"},
-        "priority": 5,
-        "dependencies": [],
-    }
+async def sample_workflow(db_session) -> dict:
+    from models.execution import WorkflowModel
+
+    workflow = WorkflowModel(
+        name="Sample Workflow",
+        description="A sample workflow",
+        agent_ids=[],
+        config={},
+    )
+    db_session.add(workflow)
+    await db_session.commit()
+    await db_session.refresh(workflow)
+    return workflow
+
+
+@pytest.fixture
+async def sample_task(db_session, sample_agent, sample_workflow) -> dict:
+    from models.execution import TaskModel
+
+    task = TaskModel(
+        workflow_id=sample_workflow.id,
+        agent_id=sample_agent.id,
+        title="Sample Task",
+        description="A sample task",
+        input_data={"query": "hello"},
+        status="pending",
+        priority=0,
+    )
+    db_session.add(task)
+    await db_session.commit()
+    await db_session.refresh(task)
+    return task
 
 
 # ---------------------------------------------------------------------------
-# Mock LLM provider — prevents real API calls in executor tests
+# Mock LLM provider
 # ---------------------------------------------------------------------------
 @pytest.fixture
-def mock_llm_response():
-    """Returns a mock LLM response object."""
+def mock_llm():
     mock_response = MagicMock()
-    mock_response.content = '{"result": "Mock LLM response", "status": "success"}'
-    return mock_response
+    mock_response.content = '{"result": "mocked response", "timestamp": "2026-01-01T00:00:00"}'
 
+    mock_provider = AsyncMock()
+    mock_provider.ainvoke = AsyncMock(return_value=mock_response)
 
-@pytest.fixture
-def mock_provider(mock_llm_response):
-    """Patches the LLM provider so no real calls are made."""
-    with patch("agents.executor.AgentExecutor._get_llm") as mock_get_llm:
-        mock_provider_instance = AsyncMock()
-        mock_provider_instance.ainvoke = AsyncMock(return_value=mock_llm_response)
-        mock_get_llm.return_value = mock_provider_instance
-        yield mock_get_llm
+    with patch("agents.providers.load_provider_from_agent", return_value=mock_provider):
+        yield mock_provider
 
 
 # ---------------------------------------------------------------------------
-# Mock task queue — prevents real queue processing
+# Task queue mock fixture
 # ---------------------------------------------------------------------------
 @pytest.fixture
-def mock_task_queue():
-    """Patches task_queue.enqueue to avoid real async processing."""
-    with patch("agents.queue.task_queue") as mock_queue:
-        mock_queue.enqueue = AsyncMock(return_value="mock-task-id-123")
-        mock_queue.get_task = MagicMock(return_value=None)
-        mock_queue.subscribe = MagicMock()
-        mock_queue.unsubscribe = MagicMock()
-        mock_queue.get_task_events = AsyncMock(return_value=[])
-        yield mock_queue
+async def mock_task_queue():
+    from agents.queue import TaskQueue, QueuedTask
+    import uuid
 
+    queue = TaskQueue(max_concurrent=10)
+    task_store = {}
 
-# ---------------------------------------------------------------------------
-# Mock db engine for health check tests
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def mock_db_failure():
-    """Patches the database engine to simulate a failure for /ready tests."""
-    with patch("core.database.engine") as mock_engine:
-        mock_engine.connect = AsyncMock(
-            side_effect=Exception("Simulated DB connection failure")
-        )
-        yield mock_engine
+    async def mock_enqueue(task_type: str, payload: dict) -> str:
+        task_id = str(uuid.uuid4())
+        task = QueuedTask(task_id=task_id, task_type=task_type, payload=payload)
+        task_store[task_id] = task
+        return task_id
+
+    async def mock_start():
+        queue._running = True
+
+    async def mock_stop():
+        queue._running = False
+
+    queue.enqueue = mock_enqueue
+    queue.start = mock_start
+    queue.stop = mock_stop
+    queue.get_task = lambda tid: task_store.get(tid)
+    queue._tasks = task_store
+    queue._subscribers = {}
+
+    with patch("agents.queue.task_queue", queue):
+        yield queue

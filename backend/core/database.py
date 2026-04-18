@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./orchestrator.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/orchestrator.db")
 
 engine = create_async_engine(
     DATABASE_URL,

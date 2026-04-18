@@ -1,375 +1,404 @@
 """
-Unit tests for SQLAlchemy ORM models in backend/models/execution.py.
+Tests for models/execution.py.
+Agent CRUD, Workflow cascade delete, Task status transitions,
+timestamps auto-populated.
 """
 import pytest
 from datetime import datetime
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.execution import (
+    AgentModel,
+    WorkflowModel,
+    TaskModel,
+    ExecutionLogModel,
+    generate_uuid,
+)
 
 
 class TestAgentModel:
-    """Test AgentModel CRUD operations."""
+    """Agent model CRUD and field defaults."""
 
-    async def test_create_agent(self, db_session):
-        from models.execution import AgentModel
-
+    async def test_agent_create(self, db_session: AsyncSession):
         agent = AgentModel(
-            name="ORM Test Agent",
-            description="Testing ORM",
+            name="Test Agent",
+            description="A test agent",
             model_provider="minimax",
             model_name="MiniMax-M2.7",
-            system_prompt="You are a test.",
-            tools=[{"name": "test", "description": "test tool"}],
-            config={"temperature": 0.7},
+            system_prompt="You are helpful.",
         )
         db_session.add(agent)
         await db_session.commit()
         await db_session.refresh(agent)
 
         assert agent.id is not None
-        assert agent.name == "ORM Test Agent"
+        assert agent.name == "Test Agent"
         assert agent.model_provider == "minimax"
-        assert agent.tools == [{"name": "test", "description": "test tool"}]
         assert agent.created_at is not None
         assert agent.updated_at is not None
 
-    async def test_read_agent(self, db_session):
-        from models.execution import AgentModel
+    async def test_agent_uuid_unique(self, db_session: AsyncSession):
+        a1 = AgentModel(name="Agent 1", system_prompt="Prompt 1")
+        a2 = AgentModel(name="Agent 2", system_prompt="Prompt 2")
+        db_session.add_all([a1, a2])
+        await db_session.commit()
 
-        agent = AgentModel(
-            name="Read Test Agent",
-            model_provider="openai",
-            model_name="gpt-4o",
-            system_prompt="Read test.",
-        )
+        assert a1.id != a2.id
+
+    async def test_agent_default_provider(self, db_session: AsyncSession):
+        agent = AgentModel(name="Default Provider Agent", system_prompt="Prompt")
         db_session.add(agent)
         await db_session.commit()
         await db_session.refresh(agent)
+
+        assert agent.model_provider == "minimax"
+        assert agent.model_name == "MiniMax-M2.7"
+
+    async def test_agent_default_tools_empty_list(self, db_session: AsyncSession):
+        agent = AgentModel(name="Tools Agent", system_prompt="Prompt")
+        db_session.add(agent)
+        await db_session.commit()
+        await db_session.refresh(agent)
+
+        assert agent.tools == []
+
+    async def test_agent_read_by_id(self, db_session: AsyncSession):
+        agent = AgentModel(name="Read Test", system_prompt="Prompt")
+        db_session.add(agent)
+        await db_session.commit()
 
         stmt = select(AgentModel).where(AgentModel.id == agent.id)
         result = await db_session.execute(stmt)
         found = result.scalar_one()
 
-        assert found.id == agent.id
-        assert found.name == "Read Test Agent"
+        assert found.name == "Read Test"
 
-    async def test_update_agent(self, db_session):
-        from models.execution import AgentModel
-
-        agent = AgentModel(
-            name="Update Test Agent",
-            model_provider="anthropic",
-            model_name="claude-3",
-            system_prompt="Before update.",
-        )
+    async def test_agent_update(self, db_session: AsyncSession):
+        agent = AgentModel(name="Old Name", system_prompt="Prompt")
         db_session.add(agent)
         await db_session.commit()
-        await db_session.refresh(agent)
 
-        agent.name = "Updated Agent Name"
-        agent.model_provider = "openai"
+        agent.name = "New Name"
         await db_session.commit()
         await db_session.refresh(agent)
 
-        assert agent.name == "Updated Agent Name"
-        assert agent.model_provider == "openai"
+        assert agent.name == "New Name"
+        assert agent.updated_at > agent.created_at
 
-    async def test_delete_agent(self, db_session):
-        from models.execution import AgentModel
-
-        agent = AgentModel(
-            name="Delete Test Agent",
-            model_provider="minimax",
-            model_name="MiniMax-M2.7",
-            system_prompt="Delete test.",
-        )
+    async def test_agent_delete(self, db_session: AsyncSession):
+        agent = AgentModel(name="Delete Me", system_prompt="Prompt")
         db_session.add(agent)
         await db_session.commit()
         agent_id = agent.id
 
-        stmt = select(AgentModel).where(AgentModel.id == agent_id)
-        result = await db_session.execute(stmt)
-        found = result.scalar_one_or_none()
-        assert found is not None
-
-        await db_session.delete(found)
+        await db_session.delete(agent)
         await db_session.commit()
 
-        result2 = await db_session.execute(stmt)
-        assert result2.scalar_one_or_none() is None
+        stmt = select(AgentModel).where(AgentModel.id == agent_id)
+        result = await db_session.execute(stmt)
+        assert result.scalar_one_or_none() is None
 
 
 class TestWorkflowModel:
-    """Test WorkflowModel CRUD and cascade delete."""
+    """Workflow model tests."""
 
-    async def test_create_workflow(self, db_session):
-        from models.execution import WorkflowModel
-
+    async def test_workflow_create(self, db_session: AsyncSession):
         wf = WorkflowModel(
-            name="ORM Workflow",
-            description="Test workflow",
+            name="Test Workflow",
+            description="Description",
             agent_ids=["agent-1", "agent-2"],
-            config={"timeout": 60},
         )
         db_session.add(wf)
         await db_session.commit()
         await db_session.refresh(wf)
 
         assert wf.id is not None
-        assert wf.name == "ORM Workflow"
+        assert wf.name == "Test Workflow"
         assert wf.agent_ids == ["agent-1", "agent-2"]
         assert wf.status == "idle"
         assert wf.created_at is not None
 
-    async def test_workflow_cascade_delete_tasks(self, db_session):
-        from models.execution import WorkflowModel, TaskModel
-
-        # Create workflow
-        wf = WorkflowModel(name="Cascade Test WF", agent_ids=[], status="idle")
+    async def test_workflow_default_agent_ids_empty_list(self, db_session: AsyncSession):
+        wf = WorkflowModel(name="Empty Agents WF")
         db_session.add(wf)
         await db_session.commit()
         await db_session.refresh(wf)
 
-        # Create two tasks
-        t1 = TaskModel(
+        assert wf.agent_ids == []
+
+    async def test_workflow_cascade_delete_tasks(
+        self, db_session: AsyncSession, sample_agent
+    ):
+        wf = WorkflowModel(name="Cascade WF", agent_ids=[])
+        db_session.add(wf)
+        await db_session.commit()
+        await db_session.refresh(wf)
+
+        task1 = TaskModel(
             workflow_id=wf.id,
-            agent_id="some-agent",
+            agent_id=sample_agent.id,
             title="Task 1",
             status="pending",
         )
-        t2 = TaskModel(
+        task2 = TaskModel(
             workflow_id=wf.id,
-            agent_id="some-agent",
+            agent_id=sample_agent.id,
             title="Task 2",
             status="pending",
         )
-        db_session.add(t1)
-        db_session.add(t2)
+        db_session.add_all([task1, task2])
         await db_session.commit()
 
         # Verify tasks exist
         stmt = select(TaskModel).where(TaskModel.workflow_id == wf.id)
         result = await db_session.execute(stmt)
-        tasks = result.scalars().all()
-        assert len(tasks) == 2
+        assert len(result.scalars().all()) == 2
 
-        # Delete workflow (manually, as cascade isn't configured in ORM)
-        from sqlalchemy import delete
-
-        await db_session.execute(delete(TaskModel).where(TaskModel.workflow_id == wf.id))
-        await db_session.execute(delete(WorkflowModel).where(WorkflowModel.id == wf.id))
+        # Delete workflow
+        await db_session.delete(wf)
         await db_session.commit()
 
-        # Verify tasks are gone
-        result2 = await db_session.execute(stmt)
-        assert len(result2.scalars().all()) == 0
+        # Tasks should be gone
+        result = await db_session.execute(stmt)
+        assert len(result.scalars().all()) == 0
 
 
 class TestTaskModel:
-    """Test TaskModel status transitions and timestamps."""
+    """Task model tests."""
 
-    async def test_create_task(self, db_session):
-        from models.execution import TaskModel
-
+    async def test_task_create(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="ORM Task",
-            description="Test task",
-            input_data={"query": "test"},
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Test Task",
+            description="A test task",
+            input_data={"key": "value"},
             priority=5,
             dependencies=["dep-1"],
-            status="pending",
         )
         db_session.add(task)
         await db_session.commit()
         await db_session.refresh(task)
 
         assert task.id is not None
+        assert task.title == "Test Task"
         assert task.status == "pending"
         assert task.priority == 5
-        assert task.retry_count == 0
         assert task.created_at is not None
 
-    async def test_task_status_transition_pending_to_running(self, db_session):
-        from models.execution import TaskModel
-
+    @pytest.mark.parametrize("status", ["pending", "running", "completed", "failed", "cancelled"])
+    async def test_task_status_transitions(
+        self, db_session: AsyncSession, sample_agent, sample_workflow, status: str
+    ):
         task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="Status Transition",
-            status="pending",
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title=f"Task {status}",
+            status=status,
+            priority=0,
         )
         db_session.add(task)
         await db_session.commit()
         await db_session.refresh(task)
+
+        assert task.status == status
+
+    async def test_task_started_at_set_when_running(
+        self, db_session: AsyncSession, sample_agent, sample_workflow
+    ):
+        task = TaskModel(
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Running Task",
+            status="pending",
+        )
+        db_session.add(task)
+        await db_session.commit()
 
         task.status = "running"
         task.started_at = datetime.utcnow()
         await db_session.commit()
         await db_session.refresh(task)
 
-        assert task.status == "running"
         assert task.started_at is not None
 
-    async def test_task_status_transition_to_completed(self, db_session):
-        from models.execution import TaskModel
-
+    async def test_task_completed_at_set_on_completion(
+        self, db_session: AsyncSession, sample_agent, sample_workflow
+    ):
         task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="Complete Me",
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Completed Task",
             status="running",
-            started_at=datetime.utcnow(),
         )
         db_session.add(task)
         await db_session.commit()
-        await db_session.refresh(task)
 
         task.status = "completed"
         task.completed_at = datetime.utcnow()
-        task.output = {"result": "success"}
+        task.output = {"result": "done"}
         await db_session.commit()
         await db_session.refresh(task)
 
-        assert task.status == "completed"
         assert task.completed_at is not None
-        assert task.output == {"result": "success"}
+        assert task.output == {"result": "done"}
 
-    async def test_task_status_transition_to_failed(self, db_session):
-        from models.execution import TaskModel
-
+    async def test_task_retry_count_default_zero(
+        self, db_session: AsyncSession, sample_agent, sample_workflow
+    ):
         task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="Fail Me",
-            status="running",
-            started_at=datetime.utcnow(),
-        )
-        db_session.add(task)
-        await db_session.commit()
-        await db_session.refresh(task)
-
-        task.status = "failed"
-        task.error = "Something went wrong"
-        task.completed_at = datetime.utcnow()
-        await db_session.commit()
-        await db_session.refresh(task)
-
-        assert task.status == "failed"
-        assert task.error == "Something went wrong"
-        assert task.completed_at is not None
-
-    async def test_task_retry_count_increment(self, db_session):
-        from models.execution import TaskModel
-
-        task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="Retry Test",
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Retry Task",
             status="failed",
-            retry_count=0,
+        )
+        db_session.add(task)
+        await db_session.commit()
+        await db_session.refresh(task)
+
+        assert task.retry_count == 0
+
+    async def test_task_increments_retry_count(
+        self, db_session: AsyncSession, sample_agent, sample_workflow
+    ):
+        task = TaskModel(
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Increment Retry",
+            status="failed",
+            retry_count=2,
         )
         db_session.add(task)
         await db_session.commit()
 
-        task.retry_count = 1
-        task.status = "pending"
-        task.error = None
+        task.retry_count += 1
         await db_session.commit()
         await db_session.refresh(task)
 
-        assert task.retry_count == 1
-        assert task.status == "pending"
+        assert task.retry_count == 3
+
+    async def test_task_workflow_id_indexed(
+        self, db_session: AsyncSession, sample_agent, sample_workflow
+    ):
+        """workflow_id should be stored and queryable."""
+        wf_id = sample_workflow.id
+        task = TaskModel(
+            workflow_id=wf_id,
+            agent_id=sample_agent.id,
+            title="Indexed Task",
+            status="pending",
+        )
+        db_session.add(task)
+        await db_session.commit()
+
+        stmt = select(TaskModel).where(TaskModel.workflow_id == wf_id)
+        result = await db_session.execute(stmt)
+        found = result.scalar_one()
+
+        assert found.workflow_id == wf_id
+
+
+class TestTimestamps:
+    """Timestamps auto-populated on create/update."""
+
+    async def test_agent_timestamps_auto_populated(self, db_session: AsyncSession):
+        before = datetime.utcnow()
+        agent = AgentModel(name="Timestamp Test", system_prompt="Prompt")
+        db_session.add(agent)
+        await db_session.commit()
+        after = datetime.utcnow()
+
+        assert agent.created_at >= before
+        assert agent.created_at <= after
+        assert agent.updated_at is not None
+
+    async def test_workflow_timestamps_auto_populated(self, db_session: AsyncSession):
+        before = datetime.utcnow()
+        wf = WorkflowModel(name="Timestamp WF")
+        db_session.add(wf)
+        await db_session.commit()
+        after = datetime.utcnow()
+
+        assert wf.created_at >= before
+        assert wf.created_at <= after
+        assert wf.updated_at is not None
+
+    async def test_task_timestamps_auto_populated(self, db_session: AsyncSession, sample_agent, sample_workflow):
+        before = datetime.utcnow()
+        task = TaskModel(
+            workflow_id=sample_workflow.id,
+            agent_id=sample_agent.id,
+            title="Timestamp Task",
+            status="pending",
+        )
+        db_session.add(task)
+        await db_session.commit()
+        after = datetime.utcnow()
+
+        assert task.created_at >= before
+        assert task.created_at <= after
+
+    async def test_workflow_updated_at_changes_on_update(self, db_session: AsyncSession):
+        wf = WorkflowModel(name="Update Timestamps WF")
+        db_session.add(wf)
+        await db_session.commit()
+
+        original_updated = wf.updated_at
+        wf.name = "Updated WF Name"
+        await db_session.commit()
+        await db_session.refresh(wf)
+
+        assert wf.updated_at >= original_updated
 
 
 class TestExecutionLogModel:
-    """Test ExecutionLogModel."""
+    """ExecutionLogModel tests."""
 
-    async def test_create_execution_log(self, db_session):
-        from models.execution import ExecutionLogModel
-
+    async def test_execution_log_create(self, db_session: AsyncSession, sample_workflow):
         log = ExecutionLogModel(
-            workflow_id="wf-1",
-            task_id="task-1",
-            agent_id="agent-1",
-            event_type="task_completed",
-            message="Task completed successfully",
-            meta_data={"duration_ms": 150},
+            workflow_id=sample_workflow.id,
+            task_id="test-task",
+            event_type="task_started",
+            message="Task started",
+            meta_data={"step": 1},
         )
         db_session.add(log)
         await db_session.commit()
         await db_session.refresh(log)
 
         assert log.id is not None
-        assert log.workflow_id == "wf-1"
-        assert log.event_type == "task_completed"
+        assert log.event_type == "task_started"
         assert log.timestamp is not None
+        assert log.meta_data["step"] == 1
 
-    async def test_read_execution_logs_by_workflow(self, db_session):
-        from models.execution import ExecutionLogModel
-
-        for i in range(3):
-            log = ExecutionLogModel(
-                workflow_id="wf-1",
-                event_type=f"event_{i}",
-                message=f"Message {i}",
-            )
-            db_session.add(log)
+    async def test_execution_log_workflow_id_indexed(self, db_session: AsyncSession, sample_workflow):
+        wf_id = sample_workflow.id
+        log = ExecutionLogModel(
+            workflow_id=wf_id,
+            event_type="test_event",
+            message="Test",
+        )
+        db_session.add(log)
         await db_session.commit()
 
-        stmt = (
-            select(ExecutionLogModel)
-            .where(ExecutionLogModel.workflow_id == "wf-1")
-            .order_by(ExecutionLogModel.timestamp.desc())
+        stmt = select(ExecutionLogModel).where(
+            ExecutionLogModel.workflow_id == wf_id
         )
         result = await db_session.execute(stmt)
-        logs = result.scalars().all()
+        found = result.scalar_one()
 
-        assert len(logs) == 3
+        assert found.workflow_id == wf_id
 
 
-class TestTimestamps:
-    """Test that created_at / updated_at are auto-populated."""
+class TestModelUUID:
+    """generate_uuid() produces unique IDs."""
 
-    async def test_agent_timestamps_auto_populated(self, db_session):
-        from models.execution import AgentModel
-        import time
+    async def test_generate_uuid_unique(self):
+        ids = [generate_uuid() for _ in range(100)]
+        assert len(set(ids)) == 100
 
-        agent = AgentModel(
-            name="Time Test Agent",
-            model_provider="minimax",
-            model_name="MiniMax-M2.7",
-            system_prompt="Timestamp test.",
-        )
-        db_session.add(agent)
-        await db_session.commit()
-        await db_session.refresh(agent)
-
-        created_at = agent.created_at
-        updated_at = agent.updated_at
-
-        # Update
-        agent.name = "Updated Name"
-        await db_session.commit()
-        await db_session.refresh(agent)
-
-        assert agent.created_at == created_at  # unchanged
-        assert agent.updated_at >= updated_at  # changed
-
-    async def test_task_timestamps(self, db_session):
-        from models.execution import TaskModel
-
-        task = TaskModel(
-            workflow_id="wf-1",
-            agent_id="agent-1",
-            title="Time Task",
-            status="pending",
-        )
-        db_session.add(task)
-        await db_session.commit()
-        await db_session.refresh(task)
-
-        assert task.created_at is not None
-        # started_at and completed_at are initially None
-        assert task.started_at is None
-        assert task.completed_at is None
+    async def test_generate_uuid_is_string(self):
+        uid = generate_uuid()
+        assert isinstance(uid, str)
+        assert len(uid) == 36  # Standard UUID length

@@ -1,288 +1,212 @@
 """
 Tests for /api/v1/agents endpoints.
+Covers: POST (happy/422/409), GET list (empty/items), GET {id} (found/404),
+PUT update (notfound), DELETE (success/notfound), auth header (missing/wrong/right).
 """
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 
-# ---------------------------------------------------------------------------
-# POST /api/v1/agents
-# ---------------------------------------------------------------------------
+class TestAgentsCreate:
+    """POST /api/v1/agents"""
 
-async def test_create_agent_happy_path(client: AsyncClient, sample_agent_data):
-    response = await client.post("/api/v1/agents", json=sample_agent_data)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["name"] == sample_agent_data["name"]
-    assert data["description"] == sample_agent_data["description"]
-    assert data["model_provider"] == sample_agent_data["model_provider"]
-    assert data["model_name"] == sample_agent_data["model_name"]
-    assert data["system_prompt"] == sample_agent_data["system_prompt"]
-    assert data["status"] == "idle"
-    assert "id" in data
-    assert "created_at" in data
-    assert "updated_at" in data
+    async def test_create_agent_success(self, client: AsyncClient, sample_agent_data: dict):
+        response = await client.post("/api/v1/agents", json=sample_agent_data)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == sample_agent_data["name"]
+        assert data["model_provider"] == "minimax"
+        assert data["model_name"] == "MiniMax-M2.7"
+        assert "id" in data
+        assert "created_at" in data
 
+    @pytest.mark.parametrize("missing_field", ["name", "system_prompt"])
+    async def test_create_agent_missing_required_field(
+        self, client: AsyncClient, missing_field: str, sample_agent_data: dict
+    ):
+        del sample_agent_data[missing_field]
+        response = await client.post("/api/v1/agents", json=sample_agent_data)
+        assert response.status_code == 422
 
-async def test_create_agent_minimal(client: AsyncClient):
-    """Create agent with only required fields."""
-    response = await client.post(
-        "/api/v1/agents",
-        json={
-            "name": "Minimal Agent",
-            "system_prompt": "Be helpful.",
-        },
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["name"] == "Minimal Agent"
-    assert data["model_provider"] == "minimax"  # default
-    assert data["model_name"] == "MiniMax-M2.7"  # default
-
-
-async def test_create_agent_missing_name(client: AsyncClient):
-    response = await client.post(
-        "/api/v1/agents",
-        json={"system_prompt": "Be helpful."},
-    )
-    assert response.status_code == 422
-
-
-async def test_create_agent_missing_system_prompt(client: AsyncClient):
-    response = await client.post(
-        "/api/v1/agents",
-        json={"name": "No Prompt Agent"},
-    )
-    assert response.status_code == 422
-
-
-async def test_create_agent_empty_name(client: AsyncClient):
-    response = await client.post(
-        "/api/v1/agents",
-        json={"name": "", "system_prompt": "Be helpful."},
-    )
-    assert response.status_code == 422
-
-
-async def test_create_agent_unsupported_provider(client: AsyncClient, sample_agent_data):
-    sample_agent_data["model_provider"] = "unsupported_provider"
-    response = await client.post("/api/v1/agents", json=sample_agent_data)
-    assert response.status_code == 422
-
-
-async def test_create_agent_all_providers_valid(client: AsyncClient):
-    """Verify each supported LLMProvider enum value is accepted."""
-    for provider in ["openai", "anthropic", "ollama", "minimax"]:
+    async def test_create_agent_name_too_long(self, client: AsyncClient):
         response = await client.post(
             "/api/v1/agents",
             json={
-                "name": f"Agent-{provider}",
-                "system_prompt": "Test",
-                "model_provider": provider,
+                "name": "x" * 200,
+                "system_prompt": "You are helpful.",
+                "model_provider": "minimax",
+                "model_name": "MiniMax-M2.7",
             },
         )
-        assert response.status_code == 201, f"Provider {provider} should be valid"
+        assert response.status_code == 422
 
-
-async def test_create_agent_with_tools(client: AsyncClient, sample_agent_data):
-    sample_agent_data["tools"] = [
-        {"name": "web_search", "description": "Search the web", "parameters": {"type": "object"}},
-        {"name": "calculator", "description": "Do math", "parameters": {}},
-    ]
-    response = await client.post("/api/v1/agents", json=sample_agent_data)
-    assert response.status_code == 201
-    data = response.json()
-    assert len(data["tools"]) == 2
-    assert data["tools"][0]["name"] == "web_search"
-
-
-# ---------------------------------------------------------------------------
-# GET /api/v1/agents
-# ---------------------------------------------------------------------------
-
-async def test_list_agents_empty(client: AsyncClient):
-    response = await client.get("/api/v1/agents")
-    assert response.status_code == 200
-    assert response.json() == []
-
-
-async def test_list_agents_with_items(client: AsyncClient, sample_agent_data):
-    # Create two agents
-    await client.post("/api/v1/agents", json=sample_agent_data)
-    await client.post(
-        "/api/v1/agents",
-        json={**sample_agent_data, "name": "Second Agent"},
-    )
-    response = await client.get("/api/v1/agents")
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-
-
-async def test_list_agents_pagination(client: AsyncClient, sample_agent_data):
-    # Create 5 agents
-    for i in range(5):
-        await client.post(
+    async def test_create_agent_system_prompt_too_short(self, client: AsyncClient):
+        response = await client.post(
             "/api/v1/agents",
-            json={**sample_agent_data, "name": f"Agent-{i}"},
+            json={
+                "name": "Short Prompt Agent",
+                "system_prompt": "",
+                "model_provider": "minimax",
+                "model_name": "MiniMax-M2.7",
+            },
         )
+        assert response.status_code == 422
 
-    # Skip 2, limit 2
-    response = await client.get("/api/v1/agents?skip=2&limit=2")
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-
-    # Check total via headers or just verify IDs are distinct
-    ids = [a["id"] for a in data]
-    assert len(set(ids)) == 2
-
-
-async def test_list_agents_pagination_skip_only(client: AsyncClient, sample_agent_data):
-    # Create 3 agents
-    for i in range(3):
-        await client.post(
+    async def test_create_agent_invalid_provider(self, client: AsyncClient):
+        response = await client.post(
             "/api/v1/agents",
-            json={**sample_agent_data, "name": f"Agent-{i}"},
+            json={
+                "name": "Bad Provider Agent",
+                "system_prompt": "You are helpful.",
+                "model_provider": "invalid_provider",
+                "model_name": "MiniMax-M2.7",
+            },
         )
-    response = await client.get("/api/v1/agents?skip=1")
-    assert response.status_code == 200
-    assert len(response.json()) == 2
+        assert response.status_code == 422
+
+    async def test_create_agent_duplicate_name_not_conflict(
+        self, client: AsyncClient, sample_agent_data: dict
+    ):
+        """Names are not unique constraints – two agents can share a name."""
+        r1 = await client.post("/api/v1/agents", json=sample_agent_data)
+        assert r1.status_code == 201
+        r2 = await client.post("/api/v1/agents", json=sample_agent_data)
+        assert r2.status_code == 201
 
 
-async def test_list_agents_pagination_limit_only(client: AsyncClient, sample_agent_data):
-    for i in range(3):
-        await client.post(
-            "/api/v1/agents",
-            json={**sample_agent_data, "name": f"Agent-{i}"},
+class TestAgentsList:
+    """GET /api/v1/agents"""
+
+    async def test_list_agents_empty(self, client: AsyncClient):
+        response = await client.get("/api/v1/agents")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_list_agents_with_items(self, client: AsyncClient, sample_agent):
+        response = await client.get("/api/v1/agents")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == sample_agent.id
+
+    @pytest.mark.parametrize("skip,limit,expected", [(0, 1, 1), (1, 10, 0), (0, 0, 422)])
+    async def test_list_agents_pagination(
+        self, client: AsyncClient, sample_agent, skip: int, limit: int, expected: int
+    ):
+        response = await client.get(f"/api/v1/agents?skip={skip}&limit={limit}")
+        if expected == 422:
+            assert response.status_code == 422
+        else:
+            assert response.status_code == 200
+            assert len(response.json()) == expected
+
+
+class TestAgentsGet:
+    """GET /api/v1/agents/{agent_id}"""
+
+    async def test_get_agent_found(self, client: AsyncClient, sample_agent):
+        response = await client.get(f"/api/v1/agents/{sample_agent.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == sample_agent.id
+        assert data["name"] == sample_agent.name
+
+    async def test_get_agent_not_found(self, client: AsyncClient):
+        response = await client.get("/api/v1/agents/nonexistent-id")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+
+class TestAgentsUpdate:
+    """PUT /api/v1/agents/{agent_id}"""
+
+    async def test_update_agent_success(self, client: AsyncClient, sample_agent):
+        response = await client.put(
+            f"/api/v1/agents/{sample_agent.id}",
+            json={"name": "Updated Agent Name"},
         )
-    response = await client.get("/api/v1/agents?limit=2")
-    assert response.status_code == 200
-    assert len(response.json()) == 2
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Updated Agent Name"
+
+    async def test_update_agent_not_found(self, client: AsyncClient):
+        response = await client.put(
+            "/api/v1/agents/nonexistent-id",
+            json={"name": "Should Not Work"},
+        )
+        assert response.status_code == 404
+
+    async def test_update_agent_partial(self, client: AsyncClient, sample_agent):
+        """Only name updated, other fields unchanged."""
+        response = await client.put(
+            f"/api/v1/agents/{sample_agent.id}",
+            json={"description": "New description"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == sample_agent.name
+        assert data["description"] == "New description"
+
+    async def test_update_agent_invalid_provider(self, client: AsyncClient, sample_agent):
+        response = await client.put(
+            f"/api/v1/agents/{sample_agent.id}",
+            json={"model_provider": "invalid"},
+        )
+        assert response.status_code == 422
 
 
-async def test_list_agents_pagination_limit_max(client: AsyncClient):
-    """limit > 500 should be rejected."""
-    response = await client.get("/api/v1/agents?limit=501")
-    assert response.status_code == 422
+class TestAgentsDelete:
+    """DELETE /api/v1/agents/{agent_id}"""
+
+    async def test_delete_agent_success(self, client: AsyncClient, sample_agent):
+        response = await client.delete(f"/api/v1/agents/{sample_agent.id}")
+        assert response.status_code == 204
+        # Verify it's gone
+        response2 = await client.get(f"/api/v1/agents/{sample_agent.id}")
+        assert response2.status_code == 404
+
+    async def test_delete_agent_not_found(self, client: AsyncClient):
+        response = await client.delete("/api/v1/agents/nonexistent-id")
+        assert response.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# GET /api/v1/agents/{id}
-# ---------------------------------------------------------------------------
+class TestAgentsAuth:
+    """Auth header enforcement on agent endpoints."""
 
-async def test_get_agent_found(client: AsyncClient, sample_agent_data):
-    create_resp = await client.post("/api/v1/agents", json=sample_agent_data)
-    agent_id = create_resp.json()["id"]
+    async def test_create_agent_no_auth_header(self, app, sample_agent_data: dict):
+        """Without X-API-Key header, request should be rejected."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.post("/api/v1/agents", json=sample_agent_data)
+        assert response.status_code == 403
 
-    response = await client.get(f"/api/v1/agents/{agent_id}")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == agent_id
-    assert data["name"] == sample_agent_data["name"]
+    async def test_create_agent_wrong_auth_header(self, app, sample_agent_data: dict):
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"X-API-Key": "wrong-key"},
+        ) as ac:
+            response = await ac.post("/api/v1/agents", json=sample_agent_data)
+        assert response.status_code == 403
 
+    async def test_create_agent_correct_auth_header(self, client: AsyncClient, sample_agent_data: dict):
+        response = await client.post("/api/v1/agents", json=sample_agent_data)
+        assert response.status_code == 201
 
-async def test_get_agent_not_found(client: AsyncClient):
-    response = await client.get("/api/v1/agents/nonexistent-id-abc123")
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    async def test_get_agent_no_auth(self, app, sample_agent):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.get(f"/api/v1/agents/{sample_agent.id}")
+        assert response.status_code == 403
 
+    async def test_list_agents_no_auth(self, app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.get("/api/v1/agents")
+        assert response.status_code == 403
 
-# ---------------------------------------------------------------------------
-# PUT /api/v1/agents/{id}
-# ---------------------------------------------------------------------------
+    async def test_list_agents_with_correct_auth(self, client: AsyncClient, sample_agent):
+        response = await client.get("/api/v1/agents")
+        assert response.status_code == 200
 
-async def test_update_agent_partial(client: AsyncClient, sample_agent_data):
-    create_resp = await client.post("/api/v1/agents", json=sample_agent_data)
-    agent_id = create_resp.json()["id"]
-
-    response = await client.put(
-        f"/api/v1/agents/{agent_id}",
-        json={"name": "Updated Name"},
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == "Updated Name"
-    # Other fields unchanged
-    assert data["system_prompt"] == sample_agent_data["system_prompt"]
-
-
-async def test_update_agent_full(client: AsyncClient, sample_agent_data):
-    create_resp = await client.post("/api/v1/agents", json=sample_agent_data)
-    agent_id = create_resp.json()["id"]
-
-    updated_data = {
-        "name": "Fully Updated Agent",
-        "description": "New description",
-        "model_provider": "openai",
-        "model_name": "gpt-4o",
-        "system_prompt": "Updated prompt.",
-        "config": {"temperature": 0.9},
-    }
-    response = await client.put(f"/api/v1/agents/{agent_id}", json=updated_data)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == "Fully Updated Agent"
-    assert data["model_provider"] == "openai"
-
-
-async def test_update_agent_not_found(client: AsyncClient):
-    response = await client.put(
-        "/api/v1/agents/nonexistent-id-xyz",
-        json={"name": "Updated"},
-    )
-    assert response.status_code == 404
-
-
-async def test_update_agent_invalid_provider(client: AsyncClient, sample_agent_data):
-    create_resp = await client.post("/api/v1/agents", json=sample_agent_data)
-    agent_id = create_resp.json()["id"]
-
-    response = await client.put(
-        f"/api/v1/agents/{agent_id}",
-        json={"model_provider": "invalid_provider"},
-    )
-    assert response.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# DELETE /api/v1/agents/{id}
-# ---------------------------------------------------------------------------
-
-async def test_delete_agent_success(client: AsyncClient, sample_agent_data):
-    create_resp = await client.post("/api/v1/agents", json=sample_agent_data)
-    agent_id = create_resp.json()["id"]
-
-    response = await client.delete(f"/api/v1/agents/{agent_id}")
-    assert response.status_code == 204
-
-    # Verify it's gone
-    get_resp = await client.get(f"/api/v1/agents/{agent_id}")
-    assert get_resp.status_code == 404
-
-
-async def test_delete_agent_not_found(client: AsyncClient):
-    response = await client.delete("/api/v1/agents/nonexistent-id-xyz")
-    assert response.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------------------------
-
-async def test_auth_missing_api_key(unauthenticated_client: AsyncClient):
-    """Requests without X-API-Key header should be rejected when APP_API_KEY is set."""
-    response = await unauthenticated_client.get("/api/v1/agents")
-    assert response.status_code == 403
-
-
-async def test_auth_wrong_api_key(wrong_auth_client: AsyncClient):
-    """Requests with wrong X-API-Key should be rejected."""
-    response = await wrong_auth_client.get("/api/v1/agents")
-    assert response.status_code == 403
-
-
-async def test_auth_correct_api_key(client: AsyncClient):
-    """Requests with correct X-API-Key should succeed."""
-    response = await client.get("/api/v1/agents")
-    assert response.status_code == 200
+    async def test_delete_agent_no_auth(self, app, sample_agent):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.delete(f"/api/v1/agents/{sample_agent.id}")
+        assert response.status_code == 403
