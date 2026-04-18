@@ -144,7 +144,7 @@ test.describe('Tasks - List, Filter, Details, and Retry', () => {
 
   test('Task details shows output', async ({ page }) => {
     // View details of a completed task
-    await page.click('button:has-text("View Details")').first().catch(() => {});
+    await page.locator('button:has-text("View Details")').first().click().catch(() => {});
     
     await expect(
       page.locator('text=Output').or(page.locator('.modal-wide'))
@@ -152,7 +152,7 @@ test.describe('Tasks - List, Filter, Details, and Retry', () => {
   });
 
   test('Task details shows metadata', async ({ page }) => {
-    await page.click('button:has-text("View Details")').first().catch(() => {});
+    await page.locator('button:has-text("View Details")').first().click().catch(() => {});
     
     // Metadata fields like created, started, completed times
     await expect(
