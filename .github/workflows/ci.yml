@@ -134,8 +134,8 @@ jobs:
       - name: Start backend
         run: |
           cd backend
-          uvicorn main:app --host 0.0.0.0 --port 8000 &
-          sleep 15
+          nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+          echo "Backend PID: $!"
         env:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           OPENAI_API_KEY: test-key
@@ -145,14 +145,33 @@ jobs:
         run: |
           cd frontend
           npm run build
-          node .next/standalone/server.js &
-          sleep 10
+          nohup node .next/standalone/server.js > /tmp/frontend.log 2>&1 &
+          echo "Frontend PID: $!"
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
           PORT: 3000
 
       - name: Wait for services
-        run: npx wait-on --tcp :3000 :8000 --timeout 60000
+        run: |
+          echo "Waiting for backend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend ready!"
+              break
+            fi
+            echo "Backend not ready, attempt $i/30..."
+            sleep 2
+          done
+          echo "Waiting for frontend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend ready!"
+              break
+            fi
+            echo "Frontend not ready, attempt $i/30..."
+            sleep 2
+          done
+          echo "Services should be up!"
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
