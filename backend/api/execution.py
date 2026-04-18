@@ -2,29 +2,20 @@
 Execution monitoring, event streaming, and dashboard stats API endpoints.
 """
 import asyncio
+
 import json
 import logging
 from datetime import datetime
 from typing import List, Optional
 
+from agents import queue as agent_queue
+from core.database import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+from models.execution import AgentModel, ExecutionLogModel, TaskModel, WorkflowModel
+from schemas import DashboardStats, ExecutionEvent, ExecutionLogResponse
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-
-from core.database import get_db
-from models.execution import (
-    AgentModel,
-    WorkflowModel,
-    TaskModel,
-    ExecutionLogModel,
-)
-from schemas import (
-    DashboardStats,
-    ExecutionLogResponse,
-    ExecutionEvent,
-)
-from agents import queue as agent_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/execution", tags=["execution"])
@@ -36,6 +27,7 @@ async def stream_task_events(task_id: str, request: Request):
     SSE stream for a single task's execution events.
     Streams task_started, task_completed, task_failed, heartbeat, etc.
     """
+
     async def event_generator():
         subscriber_id = f"stream_{task_id}_{id(request)}"
         queue: asyncio.Queue = asyncio.Queue()
@@ -58,9 +50,7 @@ async def stream_task_events(task_id: str, request: Request):
                     yield f"data: {data}\n\n"
 
                     # Graceful close when terminal state reached
-                    if event.get("type") == "status_changed" and event.get(
-                        "status"
-                    ) in ("completed", "failed"):
+                    if event.get("type") == "status_changed" and event.get("status") in ("completed", "failed"):
                         break
 
                 except asyncio.TimeoutError:
@@ -91,6 +81,7 @@ async def stream_workflow_events(workflow_id: str, request: Request):
     SSE stream for all task events within a workflow.
     Streams task_started, task_completed, task_failed, heartbeat, etc.
     """
+
     async def event_generator():
         subscriber_id = f"workflow_stream_{workflow_id}_{id(request)}"
         queue: asyncio.Queue = asyncio.Queue()
@@ -200,9 +191,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     workflow_count = await db.scalar(select(func.count(WorkflowModel.id)))
     task_count = await db.scalar(select(func.count(TaskModel.id)))
 
-    active_workflows = await db.scalar(
-        select(func.count(WorkflowModel.id)).where(WorkflowModel.status == "running")
-    )
+    active_workflows = await db.scalar(select(func.count(WorkflowModel.id)).where(WorkflowModel.status == "running"))
 
     completed_today = await db.scalar(
         select(func.count(TaskModel.id)).where(
@@ -218,12 +207,8 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         )
     )
 
-    total_completed = await db.scalar(
-        select(func.count(TaskModel.id)).where(TaskModel.status == "completed")
-    )
-    total_failed = await db.scalar(
-        select(func.count(TaskModel.id)).where(TaskModel.status == "failed")
-    )
+    total_completed = await db.scalar(select(func.count(TaskModel.id)).where(TaskModel.status == "completed"))
+    total_failed = await db.scalar(select(func.count(TaskModel.id)).where(TaskModel.status == "failed"))
 
     total_finished = (total_completed or 0) + (total_failed or 0)
     success_rate = (total_completed or 0) / total_finished if total_finished > 0 else 0.0

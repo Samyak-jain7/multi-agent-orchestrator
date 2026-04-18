@@ -3,6 +3,7 @@ Tests for /api/v1/tasks endpoints.
 Covers: CRUD happy/error paths, POST /retry 400 for running/pending,
 200 for failed/cancelled, filter by workflow_id, filter by status.
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -10,9 +11,7 @@ from httpx import AsyncClient
 class TestTasksCreate:
     """POST /api/v1/tasks"""
 
-    async def test_create_task_success(
-        self, client: AsyncClient, sample_workflow, sample_agent
-    ):
+    async def test_create_task_success(self, client: AsyncClient, sample_workflow, sample_agent):
         response = await client.post(
             "/api/v1/tasks",
             json={
@@ -31,9 +30,7 @@ class TestTasksCreate:
         assert data["status"] == "pending"
         assert "id" in data
 
-    async def test_create_task_missing_required_field(
-        self, client: AsyncClient, sample_workflow, sample_agent
-    ):
+    async def test_create_task_missing_required_field(self, client: AsyncClient, sample_workflow, sample_agent):
         response = await client.post(
             "/api/v1/tasks",
             json={
@@ -84,9 +81,7 @@ class TestTasksList:
         assert len(data) == 1
         assert data[0]["id"] == sample_task.id
 
-    async def test_list_tasks_filter_by_workflow_id(
-        self, client: AsyncClient, sample_task, db_session, sample_agent
-    ):
+    async def test_list_tasks_filter_by_workflow_id(self, client: AsyncClient, sample_task, db_session, sample_agent):
         from models.execution import TaskModel, WorkflowModel
 
         # Second task with different workflow
@@ -105,9 +100,7 @@ class TestTasksList:
         db_session.add(task2)
         await db_session.commit()
 
-        response = await client.get(
-            f"/api/v1/tasks?workflow_id={sample_task.workflow_id}"
-        )
+        response = await client.get(f"/api/v1/tasks?workflow_id={sample_task.workflow_id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -140,9 +133,7 @@ class TestTasksList:
         assert any(t["status"] == status_filter for t in data)
 
     @pytest.mark.parametrize("skip,limit,expected", [(0, 1, 1), (1, 10, 0)])
-    async def test_list_tasks_pagination(
-        self, client: AsyncClient, sample_task, skip: int, limit: int, expected: int
-    ):
+    async def test_list_tasks_pagination(self, client: AsyncClient, sample_task, skip: int, limit: int, expected: int):
         response = await client.get(f"/api/v1/tasks?skip={skip}&limit={limit}")
         assert response.status_code == 200
         assert len(response.json()) == expected
@@ -183,9 +174,7 @@ class TestTasksUpdate:
         )
         assert response.status_code == 404
 
-    async def test_update_task_status_to_running(
-        self, client: AsyncClient, sample_task
-    ):
+    async def test_update_task_status_to_running(self, client: AsyncClient, sample_task):
         response = await client.put(
             f"/api/v1/tasks/{sample_task.id}",
             json={"status": "running"},
@@ -196,9 +185,7 @@ class TestTasksUpdate:
         # started_at should be set
         assert data["started_at"] is not None
 
-    async def test_update_task_status_to_completed(
-        self, client: AsyncClient, sample_task
-    ):
+    async def test_update_task_status_to_completed(self, client: AsyncClient, sample_task):
         response = await client.put(
             f"/api/v1/tasks/{sample_task.id}",
             json={"status": "completed"},

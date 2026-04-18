@@ -4,6 +4,7 @@ Only LLM calls are mocked. No mocking of database operations.
 """
 import asyncio
 
+
 import pytest
 
 
@@ -136,10 +137,7 @@ async def test_concurrent_task_limit_via_queue(client, make_agent):
     # Wait for all to complete
     for _ in range(40):
         await asyncio.sleep(0.5)
-        statuses = [
-            (await client.get(f"/api/v1/execution/task/{tid}/status")).json()["status"]
-            for tid in task_ids
-        ]
+        statuses = [(await client.get(f"/api/v1/execution/task/{tid}/status")).json()["status"] for tid in task_ids]
         if all(s in ("completed", "failed") for s in statuses):
             break
     else:
@@ -243,6 +241,7 @@ async def test_sse_stream_events_ordered(client, make_agent):
         async for line in response.aiter_lines():
             if line.startswith("data: "):
                 import json as _json
+
                 event = _json.loads(line[6:])
                 received_events.append(event)
                 if len(received_events) >= 3:
@@ -283,6 +282,7 @@ async def test_workflow_sse_stream(client, make_agent):
         async for line in response.aiter_lines():
             if line.startswith("data: "):
                 import json as _json
+
                 event = _json.loads(line[6:])
                 received_events.append(event)
                 if len(received_events) >= 4:

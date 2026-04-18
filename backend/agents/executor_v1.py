@@ -1,16 +1,14 @@
-import asyncio
 import json
-import re
-from typing import Dict, Any, List, Optional, Callable, Awaitable
 from datetime import datetime
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from models.execution import AgentModel, TaskModel, WorkflowModel, ExecutionLogModel
-from schemas import TaskStatus, WorkflowStatus, ExecutionEvent
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from models.execution import AgentModel, ExecutionLogModel, TaskModel, WorkflowModel
+from schemas import ExecutionEvent, TaskStatus, WorkflowStatus
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AgentState(dict):
@@ -42,6 +40,7 @@ class AgentExecutor:
             return self._provider_cache[cache_key]
 
         from agents.providers import load_provider_from_agent
+
         provider = load_provider_from_agent(
             agent_model_name=agent.model_name or "MiniMax-M2.7",
             agent_provider=agent.model_provider or "minimax",
@@ -57,10 +56,7 @@ class AgentExecutor:
 
         await self._update_task_status(task_id, TaskStatus.RUNNING)
         await self._emit_event(
-            event_type="task_started",
-            task_id=task_id,
-            agent_id=agent_id,
-            message=f"Task {task_id} started execution"
+            event_type="task_started", task_id=task_id, agent_id=agent_id, message=f"Task {task_id} started execution"
         )
 
         try:
@@ -74,7 +70,7 @@ class AgentExecutor:
                 event_type="task_completed",
                 task_id=task_id,
                 agent_id=agent_id,
-                message=f"Task {task_id} completed successfully"
+                message=f"Task {task_id} completed successfully",
             )
         except Exception as e:
             state["error"] = str(e)
@@ -86,7 +82,7 @@ class AgentExecutor:
                 task_id=task_id,
                 agent_id=agent_id,
                 message=f"Task {task_id} failed: {str(e)}",
-                meta_data={"error": str(e)}
+                meta_data={"error": str(e)},
             )
 
         return state
@@ -109,7 +105,7 @@ class AgentExecutor:
 
         response = await provider.ainvoke([system_msg, HumanMessage(content=user_content)])
 
-        output_text = response.content if hasattr(response, 'content') else str(response)
+        output_text = response.content if hasattr(response, "content") else str(response)
 
         return self._parse_output(output_text)
 
@@ -124,24 +120,17 @@ class AgentExecutor:
     def _parse_output(self, output: str) -> Dict[str, Any]:
         try:
             # Find the first '{' and last '}' to handle nested objects
-            start_idx = output.find('{')
-            end_idx = output.rfind('}')
+            start_idx = output.find("{")
+            end_idx = output.rfind("}")
             if start_idx != -1 and end_idx != -1:
-                return json.loads(output[start_idx:end_idx + 1])
+                return json.loads(output[start_idx : end_idx + 1])
         except json.JSONDecodeError:
             pass
 
-        return {
-            "result": output,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return {"result": output, "timestamp": datetime.utcnow().isoformat()}
 
     async def _update_task_status(
-        self,
-        task_id: str,
-        status: TaskStatus,
-        output: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None
+        self, task_id: str, status: TaskStatus, output: Optional[Dict[str, Any]] = None, error: Optional[str] = None
     ):
         update_data = {"status": status.value}
         if status == TaskStatus.RUNNING:
@@ -164,7 +153,7 @@ class AgentExecutor:
         task_id: str = None,
         agent_id: str = None,
         message: str = "",
-        meta_data: Optional[Dict[str, Any]] = None
+        meta_data: Optional[Dict[str, Any]] = None,
     ):
         if self.event_callback:
             event = ExecutionEvent(
@@ -173,7 +162,7 @@ class AgentExecutor:
                 task_id=task_id,
                 agent_id=agent_id,
                 message=message,
-                meta_data=meta_data
+                meta_data=meta_data,
             )
             await self.event_callback(event)
 
@@ -186,11 +175,7 @@ class AgentExecutor:
 
         return workflow.compile(checkpointer=MemorySaver())
 
-    async def execute_workflow(
-        self,
-        workflow_id: str,
-        input_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_workflow(self, workflow_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
         stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         result = await self.db.execute(stmt)
         workflow = result.scalar_one_or_none()
@@ -200,14 +185,10 @@ class AgentExecutor:
 
         await self._update_workflow_status(workflow_id, WorkflowStatus.RUNNING)
         await self._emit_event(
-            event_type="workflow_started",
-            workflow_id=workflow_id,
-            message=f"Workflow {workflow_id} started"
+            event_type="workflow_started", workflow_id=workflow_id, message=f"Workflow {workflow_id} started"
         )
 
-        stmt_tasks = select(TaskModel).where(
-            TaskModel.workflow_id == workflow_id
-        ).order_by(TaskModel.priority.desc())
+        stmt_tasks = select(TaskModel).where(TaskModel.workflow_id == workflow_id).order_by(TaskModel.priority.desc())
 
         result_tasks = await self.db.execute(stmt_tasks)
         tasks = result_tasks.scalars().all()
@@ -232,10 +213,7 @@ class AgentExecutor:
 
         for task in tasks:
             if task.dependencies:
-                deps_met = all(
-                    task_outputs.get(dep_id, {}).get("completed")
-                    for dep_id in task.dependencies
-                )
+                deps_met = all(task_outputs.get(dep_id, {}).get("completed") for dep_id in task.dependencies)
                 if not deps_met:
                     await self._update_task_status(task.id, TaskStatus.CANCELLED)
                     continue
@@ -252,19 +230,15 @@ class AgentExecutor:
                 output_data={},
                 error=None,
                 messages=[],
-                step=0
+                step=0,
             )
 
             try:
                 final_state = await graph.ainvoke(
-                    initial_state,
-                    config={"configurable": {"thread_id": f"{workflow_id}_{task.id}"}}
+                    initial_state, config={"configurable": {"thread_id": f"{workflow_id}_{task.id}"}}
                 )
 
-                task_outputs[task.id] = {
-                    "completed": True,
-                    "output": final_state.get("output_data", {})
-                }
+                task_outputs[task.id] = {"completed": True, "output": final_state.get("output_data", {})}
                 results[task.id] = final_state.get("output_data", {})
 
             except Exception as e:
@@ -274,23 +248,17 @@ class AgentExecutor:
         await self._update_workflow_status(workflow_id, WorkflowStatus.COMPLETED)
 
         # Persist aggregated task_results to the workflow so frontend can show them
-        workflow_update = update(WorkflowModel).where(
-            WorkflowModel.id == workflow_id
-        ).values(output={"task_results": results})
+        workflow_update = (
+            update(WorkflowModel).where(WorkflowModel.id == workflow_id).values(output={"task_results": results})
+        )
         await self.db.execute(workflow_update)
         await self.db.commit()
 
         await self._emit_event(
-            event_type="workflow_completed",
-            workflow_id=workflow_id,
-            message=f"Workflow {workflow_id} completed"
+            event_type="workflow_completed", workflow_id=workflow_id, message=f"Workflow {workflow_id} completed"
         )
 
-        return {
-            "workflow_id": workflow_id,
-            "status": "completed",
-            "task_results": results
-        }
+        return {"workflow_id": workflow_id, "status": "completed", "task_results": results}
 
     async def _update_workflow_status(self, workflow_id: str, status: WorkflowStatus):
         update_data = {"status": status.value}

@@ -7,22 +7,21 @@ with proper Model + Tools + Memory + Reasoning Loop architecture.
 Graph structure:
     START -> SUPERVISOR -> [AGENTS] -> SUPERVISOR -> (END or loop)
 """
-import json
+
 import logging
-from typing import Dict, Any, List, Optional, Callable, Awaitable, Literal
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from langgraph.graph import StateGraph, END
-from typing import TypeAlias
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage, BaseMessage
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-
-from models.execution import AgentModel, TaskModel, WorkflowModel, WorkflowStatus as DBWorkflowStatus
-from schemas import ExecutionEvent, WorkflowStatus, TaskStatus
-from agents.memory import WorkflowMemory
 from agents.composio_manager import ComposioToolManager
+from agents.memory import WorkflowMemory
 from agents.providers import load_provider_from_agent
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from models.execution import AgentModel, WorkflowModel
+from models.execution import WorkflowStatus as DBWorkflowStatus
+from schemas import ExecutionEvent
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +30,7 @@ class WorkflowState(dict):
     """
     LangGraph workflow state — passed between nodes.
     """
+
     workflow_id: str
     input_data: Dict[str, Any]
     current_node: str
@@ -46,7 +46,7 @@ class WorkflowState(dict):
 class SupervisorExecutor:
     """
     Proper multi-agent orchestrator using LangGraph.
-    
+
     Key improvements over executor_v1:
     - Model + Tools + Memory + Reasoning Loop per agent
     - Supervisor-based routing (LLM decides next agent)
@@ -111,26 +111,28 @@ class SupervisorExecutor:
         workflow = result.scalar_one_or_none()
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
-        
+
         # If workflow_definition is set, use it; otherwise build from agent_ids
         if workflow.workflow_definition:
             return workflow.workflow_definition
-        
+
         # Legacy: build DAG from agent_ids
         nodes = []
         edges = []
         for i, agent_id in enumerate(workflow.agent_ids or []):
             node_id = f"agent_{i}"
-            nodes.append({
-                "id": node_id,
-                "type": "agent",
-                "agent_id": agent_id,
-                "tools": [],
-            })
+            nodes.append(
+                {
+                    "id": node_id,
+                    "type": "agent",
+                    "agent_id": agent_id,
+                    "tools": [],
+                }
+            )
             if i == 0:
                 edges.append({"from": "supervisor", "to": node_id})
             edges.append({"from": node_id, "to": "supervisor"})
-        
+
         return {
             "nodes": [{"id": "supervisor", "type": "supervisor", "config": {}}] + nodes,
             "edges": edges,
@@ -143,21 +145,19 @@ class SupervisorExecutor:
 
     def _get_supervisor_node(self, workflow_def: dict):
         """Returns a LangGraph node that acts as supervisor."""
-        
+
         def supervisor_node(state: WorkflowState) -> WorkflowState:
             import asyncio
+
             messages = state.get("messages", [])
             iteration = state.get("iteration", 0)
-            
+
             # Build context from shared memory
             memory_context = self._build_memory_context(state["workflow_id"])
-            
+
             # Get agent nodes for routing
-            agent_nodes = [
-                n for n in workflow_def.get("nodes", [])
-                if n.get("type") == "agent"
-            ]
-            
+            agent_nodes = [n for n in workflow_def.get("nodes", []) if n.get("type") == "agent"]
+
             supervisor_prompt = f"""You are a workflow supervisor managing a multi-agent pipeline.
 
 ## Current State
@@ -186,21 +186,21 @@ Based on the conversation history and current state, decide EXACTLY ONE action:
 Output JSON only — no markdown, no explanation."""
 
             response_text = self._call_llm_sync(supervisor_prompt, model="supervisor")
-            
+
             try:
                 # Try to extract JSON from response
                 decision = self._extract_json(response_text)
             except Exception:
                 decision = {"action": "finish", "reasoning": "parse error"}
-            
+
             logger.info(f"Supervisor decision: {decision}")
-            
+
             return {
                 **state,
                 "supervisor_decision": decision,
                 "current_node": "supervisor",
             }
-        
+
         return supervisor_node
 
     def _call_llm_sync(self, prompt: str, model: str = "supervisor") -> str:
@@ -209,7 +209,7 @@ Output JSON only — no markdown, no explanation."""
         For async nodes, use _call_llm_async.
         """
         import asyncio
-        
+
         # Create a simple sync wrapper for the async LLM call
         try:
             loop = asyncio.get_event_loop()
@@ -217,13 +217,14 @@ Output JSON only — no markdown, no explanation."""
                 # If we're in an async context, we need to use a different approach
                 # For sync nodes, we use a simple approach with minimax
                 from agents.providers import get_provider
+
                 provider = get_provider("minimax", self.env_vars)
-                
+
                 # Use sync invoke for supervisor decisions
                 messages = [HumanMessage(content=prompt)]
                 response = provider.ainvoke(messages)
-                
-                if hasattr(response, 'content'):
+
+                if hasattr(response, "content"):
                     return response.content
                 return str(response)
             else:
@@ -235,10 +236,11 @@ Output JSON only — no markdown, no explanation."""
     async def _call_llm_async(self, prompt: str, model: str = "supervisor") -> str:
         """Async LLM call."""
         from agents.providers import get_provider
+
         provider = get_provider("minimax", self.env_vars)
         messages = [HumanMessage(content=prompt)]
         response = await provider.ainvoke(messages)
-        return response.content if hasattr(response, 'content') else str(response)
+        return response.content if hasattr(response, "content") else str(response)
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         """Extract JSON from a text response."""
@@ -246,7 +248,7 @@ Output JSON only — no markdown, no explanation."""
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1:
-            return json.loads(text[start:end + 1])
+            return json.loads(text[start : end + 1])
         return json.loads(text)
 
     def _build_memory_context(self, workflow_id: str) -> str:
@@ -274,24 +276,22 @@ Output JSON only — no markdown, no explanation."""
 
     def _get_agent_node(self, agent_id: str, tool_names: List[str]):
         """Factory: creates a LangGraph node for a specific agent."""
-        
+
         async def agent_node(state: WorkflowState) -> WorkflowState:
             memory = WorkflowMemory(state["workflow_id"])
-            
+
             # Get agent config from DB
             agent_config = await self._get_agent_config(agent_id)
             if not agent_config:
                 logger.warning(f"Agent {agent_id} not found, skipping")
                 return {**state, "current_node": f"agent_{agent_id}"}
-            
+
             # Get tools from Composio
-            tools = self._composio.get_tools_for_agent(
-                tool_names + agent_config.get("tool_ids", [])
-            )
-            
+            tools = self._composio.get_tools_for_agent(tool_names + agent_config.get("tool_ids", []))
+
             # Read prior context
             prior_context = memory.read(limit=10)
-            
+
             # Build agent prompt
             agent_prompt = f"""{agent_config['system_prompt']}
 
@@ -306,36 +306,32 @@ Output JSON only — no markdown, no explanation."""
 - Write your final response clearly
 - If you need more information, use search or fetch tools
 """
-            
+
             # Reasoning loop: think -> act -> observe (up to max_iterations per agent)
             result = await self._agent_reasoning_loop(
                 agent_config=agent_config,
                 prompt=agent_prompt,
                 tools=tools,
-                max_iterations=agent_config.get('max_iterations', 3)
+                max_iterations=agent_config.get("max_iterations", 3),
             )
-            
+
             # Write to shared memory
             memory.write(agent_id, "agent", result["output"], {"tool_calls": result.get("tool_calls", [])})
-            
+
             # Update state
             agent_outputs = {**state.get("agent_outputs", {}), agent_id: result}
-            
+
             return {
                 **state,
                 "agent_outputs": agent_outputs,
                 "messages": state.get("messages", []) + [{"agent": agent_id, "content": result["output"]}],
                 "iteration": state.get("iteration", 0) + 1,
             }
-        
+
         return agent_node
 
     async def _agent_reasoning_loop(
-        self,
-        agent_config: Dict[str, Any],
-        prompt: str,
-        tools: List[Any],
-        max_iterations: int = 3
+        self, agent_config: Dict[str, Any], prompt: str, tools: List[Any], max_iterations: int = 3
     ) -> dict:
         """
         Agent reasoning loop: think -> use tool -> observe -> decide.
@@ -345,19 +341,19 @@ Output JSON only — no markdown, no explanation."""
         stmt = select(AgentModel).where(AgentModel.id == agent_config["id"])
         result = await self.db.execute(stmt)
         agent_model = result.scalar_one_or_none()
-        
+
         if not agent_model:
             return {"output": f"Agent {agent_config['id']} not found", "tool_calls": []}
-        
+
         llm = self._get_llm_for_agent(agent_model)
-        
+
         # Bind tools if available
         if tools:
             try:
                 llm = llm.bind_tools(tools)
             except Exception as e:
                 logger.warning(f"Failed to bind tools to LLM: {e}")
-        
+
         messages = [HumanMessage(content=prompt)]
         tool_calls_made = []
 
@@ -367,46 +363,32 @@ Output JSON only — no markdown, no explanation."""
             except Exception as e:
                 logger.error(f"LLM invocation failed: {e}")
                 return {"output": f"LLM error: {str(e)}", "tool_calls": tool_calls_made}
-            
-            if not hasattr(response, 'tool_calls') or not response.tool_calls:
+
+            if not hasattr(response, "tool_calls") or not response.tool_calls:
                 # No tool call = done thinking
                 return {
-                    "output": response.content if hasattr(response, 'content') else str(response),
-                    "tool_calls": tool_calls_made
+                    "output": response.content if hasattr(response, "content") else str(response),
+                    "tool_calls": tool_calls_made,
                 }
-            
+
             # Execute each tool call
             for tool_call in response.tool_calls:
-                tool_name = tool_call.get('name') or (tool_call.get('function', {}) or {}).get('name', 'unknown')
-                tool_args = tool_call.get('args') or tool_call.get('arguments') or {}
-                
+                tool_name = tool_call.get("name") or (tool_call.get("function", {}) or {}).get("name", "unknown")
+                tool_args = tool_call.get("args") or tool_call.get("arguments") or {}
+
                 try:
                     tool_result = await self._execute_tool(tool_name, tool_args)
-                    messages.append(ToolMessage(
-                        content=str(tool_result),
-                        tool_call_id=tool_call.get('id', 'unknown')
-                    ))
-                    tool_calls_made.append({
-                        "tool": tool_name,
-                        "args": tool_args,
-                        "result": str(tool_result)[:500]
-                    })
+                    messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_call.get("id", "unknown")))
+                    tool_calls_made.append({"tool": tool_name, "args": tool_args, "result": str(tool_result)[:500]})
                 except Exception as e:
                     error_msg = f"Tool error: {str(e)}"
-                    messages.append(ToolMessage(
-                        content=error_msg,
-                        tool_call_id=tool_call.get('id', 'unknown')
-                    ))
-                    tool_calls_made.append({
-                        "tool": tool_name,
-                        "args": tool_args,
-                        "error": str(e)
-                    })
+                    messages.append(ToolMessage(content=error_msg, tool_call_id=tool_call.get("id", "unknown")))
+                    tool_calls_made.append({"tool": tool_name, "args": tool_args, "error": str(e)})
 
         # Max iterations reached
         return {
-            "output": response.content if hasattr(response, 'content') else str(response),
-            "tool_calls": tool_calls_made
+            "output": response.content if hasattr(response, "content") else str(response),
+            "tool_calls": tool_calls_made,
         }
 
     async def _execute_tool(self, tool_name: str, args: Dict[str, Any]) -> str:
@@ -421,16 +403,17 @@ Output JSON only — no markdown, no explanation."""
             "file_read": self._tool_file_read,
             "file_write": self._tool_file_write,
         }
-        
+
         if tool_name in tool_map:
             return await tool_map[tool_name](args)
-        
+
         # Default: return a message that tool is not implemented
         return f"Tool '{tool_name}' executed with args: {args}"
 
     async def _tool_bash(self, args: Dict[str, Any]) -> str:
         """Execute a bash command."""
         import subprocess
+
         cmd = args.get("command") or args.get("cmd", "")
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
@@ -442,8 +425,9 @@ Output JSON only — no markdown, no explanation."""
         """Execute Python code."""
         code = args.get("code", "")
         try:
-            import io
             import contextlib
+            import io
+
             f = io.StringIO()
             exec(code, {"__builtins__": __builtins__})
             return f.getvalue() or "Code executed"
@@ -455,6 +439,7 @@ Output JSON only — no markdown, no explanation."""
         url = args.get("url", "")
         try:
             import httpx
+
             response = httpx.get(url, timeout=10)
             return response.text[:2000]
         except Exception as e:
@@ -465,6 +450,7 @@ Output JSON only — no markdown, no explanation."""
         query = args.get("query", "")
         try:
             import httpx
+
             # Simple search simulation (real implementation would use Google API)
             response = httpx.get(f"https://www.google.com/search?q={query}", timeout=10)
             return f"Search results for '{query}': {response.text[:500]}"
@@ -476,6 +462,7 @@ Output JSON only — no markdown, no explanation."""
         query = args.get("query", "")
         try:
             import httpx
+
             response = httpx.get(f"https://duckduckgo.com/?q={query}", timeout=10)
             return f"DDG results for '{query}': {response.text[:500]}"
         except Exception as e:
@@ -485,7 +472,7 @@ Output JSON only — no markdown, no explanation."""
         """Read a file."""
         path = args.get("path", "")
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 return f.read()[:2000]
         except Exception as e:
             return f"Read error: {str(e)}"
@@ -495,7 +482,7 @@ Output JSON only — no markdown, no explanation."""
         path = args.get("path", "")
         content = args.get("content", "")
         try:
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 f.write(content)
             return f"Written to {path}"
         except Exception as e:
@@ -507,12 +494,12 @@ Output JSON only — no markdown, no explanation."""
 
     def _build_graph(self, workflow_def: dict) -> Any:  # Returns compiled LangGraph
         """Build the full LangGraph from workflow definition."""
-        
+
         workflow = StateGraph(WorkflowState)
-        
+
         # Add supervisor node
         workflow.add_node("supervisor", self._get_supervisor_node(workflow_def))
-        
+
         # Add agent nodes
         agent_node_map = {}
         for node in workflow_def.get("nodes", []):
@@ -522,19 +509,19 @@ Output JSON only — no markdown, no explanation."""
                 node_name = f"agent_{agent_id}"
                 workflow.add_node(node_name, self._get_agent_node(agent_id, tools))
                 agent_node_map[node["id"]] = node_name
-        
+
         # Add edges from workflow definition
         for edge in workflow_def.get("edges", []):
             from_node = edge["from"]
             to_node = edge["to"]
             condition = edge.get("condition")
-            
+
             if condition:
                 # Conditional edge
                 workflow.add_conditional_edges(
                     from_node,
                     lambda state, cond=condition: self._evaluate_condition(state, cond),
-                    {to_node: to_node, "supervisor": "supervisor"}
+                    {to_node: to_node, "supervisor": "supervisor"},
                 )
             else:
                 # Direct edge
@@ -544,22 +531,25 @@ Output JSON only — no markdown, no explanation."""
                     workflow.add_edge(agent_node_map.get(from_node, from_node), to_node)
                 else:
                     workflow.add_edge(agent_node_map.get(from_node, from_node), agent_node_map.get(to_node, to_node))
-        
+
         # Entry point
         workflow.set_entry_point("supervisor")
-        
+
         # Define conditional routing from supervisor
         # The supervisor returns {"next_agent": "agent_<id>"} or {"action": "finish"}
         workflow.add_conditional_edges(
             "supervisor",
             self._supervisor_router,
             {
-                **{agent_node_map.get(n["id"], n["id"]): agent_node_map.get(n["id"], n["id"]) 
-                   for n in workflow_def.get("nodes", []) if n.get("type") == "agent"},
-                "finish": END
-            }
+                **{
+                    agent_node_map.get(n["id"], n["id"]): agent_node_map.get(n["id"], n["id"])
+                    for n in workflow_def.get("nodes", [])
+                    if n.get("type") == "agent"
+                },
+                "finish": END,
+            },
         )
-        
+
         return workflow.compile(checkpointer=MemorySaver())
 
     def _supervisor_router(self, state: WorkflowState) -> str:
@@ -589,21 +579,21 @@ Output JSON only — no markdown, no explanation."""
 
     async def execute_workflow(self, workflow_id: str, input_data: dict) -> dict:
         """Execute a workflow with proper LangGraph + shared memory."""
-        
+
         # Load workflow definition from DB
         workflow_def = await self._get_workflow_def(workflow_id)
-        
+
         # Update workflow status
         await self._update_workflow_status(workflow_id, DBWorkflowStatus.RUNNING)
         await self._emit_event(
             event_type="workflow_started",
             workflow_id=workflow_id,
-            message=f"Workflow {workflow_id} started with SupervisorExecutor"
+            message=f"Workflow {workflow_id} started with SupervisorExecutor",
         )
-        
+
         # Build graph
         graph = self._build_graph(workflow_def)
-        
+
         # Initial state
         initial_state = WorkflowState(
             workflow_id=workflow_id,
@@ -615,29 +605,26 @@ Output JSON only — no markdown, no explanation."""
             agent_outputs={},
             supervisor_decision={},
             needs_refinement=True,
-            final_output={}
+            final_output={},
         )
-        
+
         # Execute
         try:
             result = await graph.ainvoke(
-                initial_state,
-                config={"configurable": {"thread_id": f"workflow_{workflow_id}"}}
+                initial_state, config={"configurable": {"thread_id": f"workflow_{workflow_id}"}}
             )
-            
+
             # Mark workflow complete
             await self._update_workflow_status(workflow_id, DBWorkflowStatus.COMPLETED)
             await self._emit_event(
-                event_type="workflow_completed",
-                workflow_id=workflow_id,
-                message=f"Workflow {workflow_id} completed"
+                event_type="workflow_completed", workflow_id=workflow_id, message=f"Workflow {workflow_id} completed"
             )
-            
+
             return {
                 "workflow_id": workflow_id,
                 "status": "completed",
                 "output": result.get("final_output") or result.get("agent_outputs", {}),
-                "iterations": result.get("iteration", 0)
+                "iterations": result.get("iteration", 0),
             }
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
@@ -646,23 +633,20 @@ Output JSON only — no markdown, no explanation."""
                 event_type="workflow_failed",
                 workflow_id=workflow_id,
                 message=f"Workflow {workflow_id} failed: {str(e)}",
-                meta_data={"error": str(e)}
+                meta_data={"error": str(e)},
             )
-            return {
-                "workflow_id": workflow_id,
-                "status": "failed",
-                "error": str(e)
-            }
+            return {"workflow_id": workflow_id, "status": "failed", "error": str(e)}
 
     async def _update_workflow_status(self, workflow_id: str, status: DBWorkflowStatus):
         """Update workflow status in DB."""
         from datetime import datetime
+
         update_data = {"status": status.value}
         if status == DBWorkflowStatus.RUNNING:
             update_data["started_at"] = datetime.utcnow()
         elif status in (DBWorkflowStatus.COMPLETED, DBWorkflowStatus.FAILED):
             update_data["completed_at"] = datetime.utcnow()
-        
+
         stmt = update(WorkflowModel).where(WorkflowModel.id == workflow_id).values(**update_data)
         await self.db.execute(stmt)
         await self.db.commit()
@@ -674,7 +658,7 @@ Output JSON only — no markdown, no explanation."""
         task_id: str = None,
         agent_id: str = None,
         message: str = "",
-        meta_data: Optional[Dict[str, Any]] = None
+        meta_data: Optional[Dict[str, Any]] = None,
     ):
         """Emit an execution event."""
         if self.event_callback:
@@ -684,6 +668,6 @@ Output JSON only — no markdown, no explanation."""
                 task_id=task_id,
                 agent_id=agent_id,
                 message=message,
-                meta_data=meta_data
+                meta_data=meta_data,
             )
             await self.event_callback(event)

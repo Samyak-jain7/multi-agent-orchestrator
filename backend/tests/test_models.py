@@ -3,18 +3,13 @@ Tests for models/execution.py.
 Agent CRUD, Workflow cascade delete, Task status transitions,
 timestamps auto-populated.
 """
-import pytest
+
 from datetime import datetime
+
+import pytest
+from models.execution import AgentModel, ExecutionLogModel, TaskModel, WorkflowModel, generate_uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.execution import (
-    AgentModel,
-    WorkflowModel,
-    TaskModel,
-    ExecutionLogModel,
-    generate_uuid,
-)
 
 
 class TestAgentModel:
@@ -127,9 +122,7 @@ class TestWorkflowModel:
 
         assert wf.agent_ids == []
 
-    async def test_workflow_cascade_delete_tasks(
-        self, db_session: AsyncSession, sample_agent
-    ):
+    async def test_workflow_cascade_delete_tasks(self, db_session: AsyncSession, sample_agent):
         wf = WorkflowModel(name="Cascade WF", agent_ids=[])
         db_session.add(wf)
         await db_session.commit()
@@ -188,9 +181,7 @@ class TestTaskModel:
         assert task.created_at is not None
 
     @pytest.mark.parametrize("status", ["pending", "running", "completed", "failed", "cancelled"])
-    async def test_task_status_transitions(
-        self, db_session: AsyncSession, sample_agent, sample_workflow, status: str
-    ):
+    async def test_task_status_transitions(self, db_session: AsyncSession, sample_agent, sample_workflow, status: str):
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
@@ -204,9 +195,7 @@ class TestTaskModel:
 
         assert task.status == status
 
-    async def test_task_started_at_set_when_running(
-        self, db_session: AsyncSession, sample_agent, sample_workflow
-    ):
+    async def test_task_started_at_set_when_running(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
@@ -223,9 +212,7 @@ class TestTaskModel:
 
         assert task.started_at is not None
 
-    async def test_task_completed_at_set_on_completion(
-        self, db_session: AsyncSession, sample_agent, sample_workflow
-    ):
+    async def test_task_completed_at_set_on_completion(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
@@ -244,9 +231,7 @@ class TestTaskModel:
         assert task.completed_at is not None
         assert task.output == {"result": "done"}
 
-    async def test_task_retry_count_default_zero(
-        self, db_session: AsyncSession, sample_agent, sample_workflow
-    ):
+    async def test_task_retry_count_default_zero(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
@@ -259,9 +244,7 @@ class TestTaskModel:
 
         assert task.retry_count == 0
 
-    async def test_task_increments_retry_count(
-        self, db_session: AsyncSession, sample_agent, sample_workflow
-    ):
+    async def test_task_increments_retry_count(self, db_session: AsyncSession, sample_agent, sample_workflow):
         task = TaskModel(
             workflow_id=sample_workflow.id,
             agent_id=sample_agent.id,
@@ -278,9 +261,7 @@ class TestTaskModel:
 
         assert task.retry_count == 3
 
-    async def test_task_workflow_id_indexed(
-        self, db_session: AsyncSession, sample_agent, sample_workflow
-    ):
+    async def test_task_workflow_id_indexed(self, db_session: AsyncSession, sample_agent, sample_workflow):
         """workflow_id should be stored and queryable."""
         wf_id = sample_workflow.id
         task = TaskModel(
@@ -382,9 +363,7 @@ class TestExecutionLogModel:
         db_session.add(log)
         await db_session.commit()
 
-        stmt = select(ExecutionLogModel).where(
-            ExecutionLogModel.workflow_id == wf_id
-        )
+        stmt = select(ExecutionLogModel).where(ExecutionLogModel.workflow_id == wf_id)
         result = await db_session.execute(stmt)
         found = result.scalar_one()
 

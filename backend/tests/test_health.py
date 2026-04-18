@@ -2,9 +2,11 @@
 Tests for health endpoints.
 GET /health → {status:"healthy"}, GET /ready → 200 (DB up), 503 (DB down/mocked).
 """
+
+from unittest.mock import patch
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import patch
 
 
 class TestHealthCheck:

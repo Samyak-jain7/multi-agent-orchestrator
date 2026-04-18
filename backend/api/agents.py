@@ -1,26 +1,18 @@
 """
 Agent CRUD API endpoints.
 """
+
 import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-
-from core.database import get_db
-from models.execution import AgentModel, UserModel
-from schemas import (
-    AgentCreate,
-    AgentUpdate,
-    AgentResponse,
-    AgentStatus,
-    LLMProvider,
-    ToolDefinition,
-)
 from agents.composio_manager import ComposioToolManager
+from core.database import get_db
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from models.execution import AgentModel, UserModel
+from schemas import AgentCreate, AgentResponse, AgentStatus, AgentUpdate, LLMProvider, ToolDefinition
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -30,15 +22,16 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 # Auth helper
 # ---------------------------------------------------------------------------
 
+
 async def get_current_user(
-    x_api_key: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
+    x_api_key: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)
 ) -> Optional[UserModel]:
     """Get current user from API key (optional)."""
     if not x_api_key:
         return None
-    
+
     import hashlib
+
     hashed = hashlib.sha256(x_api_key.encode()).hexdigest()
     stmt = select(UserModel).where(UserModel.hashed_api_key == hashed)
     result = await db.execute(stmt)
@@ -60,13 +53,13 @@ async def list_agents(
 ):
     """List all agents with pagination. Optionally filter by owner."""
     stmt = select(AgentModel)
-    
+
     # Multi-tenant: filter by owner_id if provided or if user is authenticated
     if owner_id:
         stmt = stmt.where(AgentModel.owner_id == owner_id)
     elif current_user:
         stmt = stmt.where(AgentModel.owner_id == current_user.org_id)
-    
+
     stmt = stmt.offset(skip).limit(limit).order_by(AgentModel.created_at.desc())
     result = await db.execute(stmt)
     agents = result.scalars().all()
@@ -99,14 +92,14 @@ async def list_available_tools(
     List all available Composio tools that can be attached to agents.
     """
     manager = ComposioToolManager()
-    
+
     if category:
         tools = manager.get_tools_by_category(category)
     elif search:
         tools = manager.search_tools(search)
     else:
         tools = manager.list_available_tools()
-    
+
     return tools
 
 
@@ -158,12 +151,12 @@ async def create_agent(
 ):
     """Create a new agent."""
     logger.info(f"Creating agent: name={agent_data.name!r}, provider={agent_data.model_provider.value}")
-    
+
     # Determine owner_id
     owner_id = None
     if current_user:
         owner_id = current_user.org_id
-    
+
     agent = AgentModel(
         name=agent_data.name,
         description=agent_data.description,
@@ -231,10 +224,7 @@ async def update_agent(
     if "model_provider" in update_dict and update_dict["model_provider"]:
         update_dict["model_provider"] = update_dict["model_provider"].value
     if "tools" in update_dict and update_dict["tools"]:
-        update_dict["tools"] = [
-            t.model_dump() if hasattr(t, "model_dump") else t
-            for t in update_dict["tools"]
-        ]
+        update_dict["tools"] = [t.model_dump() if hasattr(t, "model_dump") else t for t in update_dict["tools"]]
 
     update_dict["updated_at"] = datetime.utcnow()
 
@@ -299,7 +289,7 @@ async def attach_tools_to_agent(
 ):
     """
     Attach Composio tools to an agent.
-    
+
     This replaces the existing tool_ids list for the agent.
     """
     stmt = select(AgentModel).where(AgentModel.id == agent_id)
@@ -323,7 +313,7 @@ async def attach_tools_to_agent(
     manager = ComposioToolManager()
     validated = manager.validate_tools(tool_ids)
     invalid = [tid for tid, available in validated.items() if not available]
-    
+
     if invalid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -333,12 +323,12 @@ async def attach_tools_to_agent(
     # Update agent tools
     agent.tool_ids = tool_ids
     agent.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(agent)
-    
+
     logger.info(f"Agent {agent_id} tools updated: {tool_ids}")
-    
+
     return AgentResponse(
         id=agent.id,
         name=agent.name,

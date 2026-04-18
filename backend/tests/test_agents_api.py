@@ -3,6 +3,7 @@ Tests for /api/v1/agents endpoints.
 Covers: POST (happy/422/409), GET list (empty/items), GET {id} (found/404),
 PUT update (notfound), DELETE (success/notfound), auth header (missing/wrong/right).
 """
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -64,9 +65,7 @@ class TestAgentsCreate:
         )
         assert response.status_code == 422
 
-    async def test_create_agent_duplicate_name_not_conflict(
-        self, client: AsyncClient, sample_agent_data: dict
-    ):
+    async def test_create_agent_duplicate_name_not_conflict(self, client: AsyncClient, sample_agent_data: dict):
         """Names are not unique constraints – two agents can share a name."""
         r1 = await client.post("/api/v1/agents", json=sample_agent_data)
         assert r1.status_code == 201

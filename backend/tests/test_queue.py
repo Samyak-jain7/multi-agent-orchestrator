@@ -4,9 +4,11 @@ queue.py: enqueue→in queue, worker picks up, max concurrency (mock sleep),
 pub/sub state transitions, cancellation.
 """
 import asyncio
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
-from agents.queue import TaskQueue, QueuedTask, QueueStatus
+
+import pytest
+from agents.queue import QueuedTask, QueueStatus, TaskQueue
 
 
 class TestQueueEnqueue:
@@ -262,6 +264,7 @@ class TestQueuePruning:
         try:
             # Manually add >1000 tasks to trigger pruning
             import uuid
+
             for _ in range(1050):
                 task_id = str(uuid.uuid4())
                 task = QueuedTask(

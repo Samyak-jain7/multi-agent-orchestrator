@@ -1,23 +1,18 @@
 """
 Task CRUD and retry API endpoints.
 """
+
 import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-
-from core.database import get_db
-from models.execution import TaskModel, AgentModel
-from schemas import (
-    TaskCreate,
-    TaskUpdate,
-    TaskResponse,
-    TaskStatus,
-)
 from agents.queue import task_queue
+from core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from models.execution import AgentModel, TaskModel
+from schemas import TaskCreate, TaskResponse, TaskStatus, TaskUpdate
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -28,9 +23,7 @@ async def list_tasks(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     workflow_id: Optional[str] = Query(default=None),
-    status_filter: Optional[TaskStatus] = Query(
-        default=None, alias="status", description="Filter by task status"
-    ),
+    status_filter: Optional[TaskStatus] = Query(default=None, alias="status", description="Filter by task status"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -44,9 +37,7 @@ async def list_tasks(
     if status_filter is not None:
         stmt = stmt.where(TaskModel.status == status_filter.value)
 
-    stmt = stmt.offset(skip).limit(limit).order_by(
-        TaskModel.priority.desc(), TaskModel.created_at.desc()
-    )
+    stmt = stmt.offset(skip).limit(limit).order_by(TaskModel.priority.desc(), TaskModel.created_at.desc())
     result = await db.execute(stmt)
     tasks = result.scalars().all()
 
@@ -250,7 +241,7 @@ async def retry_task(task_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot retry task with status '{task.status}'. "
-                   "Only tasks in 'failed' or 'cancelled' state can be retried.",
+            "Only tasks in 'failed' or 'cancelled' state can be retried.",
         )
 
     task.status = TaskStatus.PENDING.value

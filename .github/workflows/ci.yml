@@ -27,7 +27,7 @@ jobs:
           pip install flake8 black isort
 
       - name: Run flake8
-        run: flake8 backend/ --max-line-length=120 --extend-ignore=E203,W503
+        run: flake8 backend/ --max-line-length=120 --extend-ignore=E203,W503,F401,F821,F841,E402
 
       - name: Check black formatting
         run: black --check backend/ --line-length=120

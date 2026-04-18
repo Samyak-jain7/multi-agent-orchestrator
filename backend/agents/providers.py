@@ -6,11 +6,13 @@ Adding a new provider:
 2. Register it in PROVIDER_REGISTRY
 3. Done — no other code changes needed
 """
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
+
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 
 
 class LLMProviderStrategy(ABC):
@@ -146,23 +148,18 @@ PROVIDER_ENV_PREFIXES: Dict[str, str] = {
 }
 
 
-def get_provider(
-    provider_key: str,
-    global_config: Optional[Dict[str, str]] = None
-) -> LLMProviderStrategy:
+def get_provider(provider_key: str, global_config: Optional[Dict[str, str]] = None) -> LLMProviderStrategy:
     """
     Factory: resolve a provider key to a provider instance.
-    
+
     provider_key: "openai" | "anthropic" | "minimax" | ...
     global_config: dict of env vars (e.g. {"OPENAI_API_KEY": "...", "MINIMAX_API_KEY": "..."})
     """
     provider_class = PROVIDER_REGISTRY.get(provider_key.lower())
     if not provider_class:
         available = ", ".join(PROVIDER_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown provider '{provider_key}'. Available: {available}"
-        )
-    
+        raise ValueError(f"Unknown provider '{provider_key}'. Available: {available}")
+
     instance = provider_class()
     if global_config:
         instance._resolve_from_env(global_config, provider_key)
@@ -170,10 +167,7 @@ def get_provider(
 
 
 def load_provider_from_agent(
-    agent_model_name: str,
-    agent_provider: str,
-    agent_config: Dict[str, Any],
-    env_vars: Optional[Dict[str, str]] = None
+    agent_model_name: str, agent_provider: str, agent_config: Dict[str, Any], env_vars: Optional[Dict[str, str]] = None
 ) -> LLMProviderStrategy:
     """
     Load the correct provider for an agent, merging agent config + env vars.
@@ -182,11 +176,11 @@ def load_provider_from_agent(
     # Build merged config — env vars override agent DB config
     merged = {**agent_config}
     prefix = provider_key_from_name(agent_provider)
-    
+
     if env_vars:
         for env_key, env_val in env_vars.items():
             if env_key.upper().startswith(f"{prefix}_") or env_key.upper() == f"{prefix}_API_KEY":
-                config_key = env_key[len(prefix) + 1:].lower()
+                config_key = env_key[len(prefix) + 1 :].lower()
                 if config_key == "api_key":
                     merged["api_key"] = env_val
                 elif config_key == "base_url":
