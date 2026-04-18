@@ -119,7 +119,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           pip install -r backend/requirements.txt
-          pip install uvicorn
+          pip install email-validator uvicorn
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
