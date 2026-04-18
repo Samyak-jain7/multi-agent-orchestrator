@@ -1,10 +1,10 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = '/api';  // Use Next.js proxy instead of direct backend URL
 
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${API_BASE}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -35,6 +35,7 @@ export const api = {
     create: (data: any) => fetchApi<any>('/agents', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: any) => fetchApi<any>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => fetchApi<void>(`/agents/${id}`, { method: 'DELETE' }),
+    listTools: () => fetchApi<any[]>('/agents/tools'),
   },
 
   workflows: {
@@ -45,6 +46,7 @@ export const api = {
     delete: (id: string) => fetchApi<void>(`/workflows/${id}`, { method: 'DELETE' }),
     execute: (id: string, data: any) => fetchApi<any>(`/workflows/${id}/execute`, { method: 'POST', body: JSON.stringify(data) }),
     getTasks: (id: string) => fetchApi<any[]>(`/workflows/${id}/tasks`),
+    getMemory: (id: string) => fetchApi<any>(`/workflows/${id}/memory`),
   },
 
   tasks: {
@@ -70,7 +72,7 @@ export const api = {
       return fetchApi<any>(`/execution/task/${taskId}/events${qs}`);
     },
     getLogs: (workflowId: string) => fetchApi<any[]>(`/execution/logs/${workflowId}`),
-    streamTask: (taskId: string) => `${API_BASE}/execution/stream/${taskId}`,
-    streamWorkflow: (workflowId: string) => `${API_BASE}/execution/stream/workflow/${workflowId}`,
+    streamTask: (taskId: string) => `/api/execution/stream/${taskId}`,
+    streamWorkflow: (workflowId: string) => `/api/execution/stream/workflow/${workflowId}`,
   },
 };

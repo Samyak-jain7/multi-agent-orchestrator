@@ -47,4 +47,25 @@ describe('useStore', () => {
     expect(useStore.getState().dashboardStats).toEqual(stats);
     useStore.getState().setDashboardStats(null);
   });
+
+  it('addExecutionEvent prepends to recentEvents and caps at 100', () => {
+    useStore.setState({ recentEvents: [] });
+    const event = { id: 'evt-1', type: 'task_completed' } as any;
+    useStore.getState().addExecutionEvent(event);
+    expect(useStore.getState().recentEvents).toHaveLength(1);
+    expect(useStore.getState().recentEvents[0]).toEqual(event);
+  });
+
+  it('clearRecentEvents resets events', () => {
+    useStore.setState({ recentEvents: [{ id: 'evt-1' } as any] });
+    useStore.getState().clearRecentEvents();
+    expect(useStore.getState().recentEvents).toHaveLength(0);
+  });
+
+  it('setIsExecuting toggles state', () => {
+    useStore.getState().setIsExecuting(true);
+    expect(useStore.getState().isExecuting).toBe(true);
+    useStore.getState().setIsExecuting(false);
+    expect(useStore.getState().isExecuting).toBe(false);
+  });
 });

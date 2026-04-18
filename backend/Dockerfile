@@ -16,6 +16,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir pip==24.0
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Composio for agent tools
+RUN pip install --no-cache-dir composio-core composio-langchain
+
+RUN pip install --no-cache-dir "pydantic[email]>=2.6.1"
+# Re-pin langchain dependencies that composio overwrote
+RUN pip install --no-cache-dir 'langchain-core>=0.2.27,<0.3.0' 'langchain-openai>=0.1.7' 'langchain-anthropic>=0.1.15'
+
 
 # ---------------------------------------------------------------------------
 # Stage 2: Builder (for any additional wheel-based builds)

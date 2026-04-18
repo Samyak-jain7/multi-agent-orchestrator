@@ -842,7 +842,58 @@ code, pre, .mono {
   cursor: pointer;
 }
 
+/* ─── React Flow canvas styles ─────────────────── */
+
+.react-flow {
+  --rf-theme: dark;
+  --rf-colors-background: var(--bg-base);
+  --rf-colors-primary: var(--accent);
+}
+
+.react-flow__node {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  padding: 12px 16px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.875rem;
+  min-width: 180px;
+}
+
+.react-flow__node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-dim);
+}
+
+.react-flow__edge-path {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent);
+}
+
+.react-flow__controls {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.react-flow__controls-button {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.react-flow__minimap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* ─── Scrollable List ────────────────────────────── */
+
 
 .scrollable-list {
   max-height: 200px;

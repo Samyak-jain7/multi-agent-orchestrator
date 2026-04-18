@@ -1,7 +1,8 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, Page, APIRequestContext } from '@playwright/test';
 
+// API helper functions
 export async function createTestAgent(
-  request: any,
+  request: APIRequestContext,
   options: {
     name?: string;
     provider?: string;
@@ -28,7 +29,7 @@ export async function createTestAgent(
 }
 
 export async function createTestWorkflow(
-  request: any,
+  request: APIRequestContext,
   agentId?: string
 ) {
   const response = await request.post('http://localhost:8000/api/v1/workflows', {
@@ -46,7 +47,8 @@ export async function createTestWorkflow(
   return response.json();
 }
 
-export async function cleanupTestData(request: any) {
+export async function cleanupTestData(request: APIRequestContext) {
+  // Clean up agents
   try {
     const agentsResponse = await request.get('http://localhost:8000/api/v1/agents');
     if (agentsResponse.ok()) {
@@ -59,6 +61,7 @@ export async function cleanupTestData(request: any) {
     }
   } catch {}
 
+  // Clean up workflows
   try {
     const workflowsResponse = await request.get('http://localhost:8000/api/v1/workflows');
     if (workflowsResponse.ok()) {
@@ -71,6 +74,7 @@ export async function cleanupTestData(request: any) {
     }
   } catch {}
 
+  // Clean up tasks
   try {
     const tasksResponse = await request.get('http://localhost:8000/api/v1/tasks');
     if (tasksResponse.ok()) {
@@ -84,12 +88,14 @@ export async function cleanupTestData(request: any) {
   } catch {}
 }
 
+// Extended test fixture type
 type TestFixtures = {
   createTestAgent: typeof createTestAgent;
   createTestWorkflow: typeof createTestWorkflow;
   cleanupTestData: typeof cleanupTestData;
 };
 
+// Extend Playwright test with custom fixtures
 export const test = base.extend<TestFixtures>({
   createTestAgent: async ({ request }, use) => {
     await use(createTestAgent);

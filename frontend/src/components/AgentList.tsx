@@ -6,13 +6,10 @@ import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Select } from '@/components/ui/Select';
-import { Modal } from '@/components/ui/Modal';
-import { Plus, Trash2, Loader2, Bot } from 'lucide-react';
-import { getStatusColor, getProviderLabel } from '@/lib/utils';
+import { Trash2, Loader2, Bot, Brain } from 'lucide-react';
+import { getStatusColor, getProviderLabel, formatRelativeTime } from '@/lib/utils';
 import type { Agent, LLMProvider } from '@/types';
+import { AgentCreateModal } from './AgentCreateModal';
 
 const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string }[]> = {
   openai: [
@@ -29,7 +26,7 @@ const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string }[]> =
   minimax: [
     { value: 'MiniMax-M2.7', label: 'MiniMax-M2.7 (latest, 204k context)' },
     { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed (~100 tps)' },
-    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5' },
+    { value: 'MiniMax-M2.5', label: 'MiniMax-M2.5 (prev gen)' },
     { value: 'MiniMax-M2.5-highspeed', label: 'MiniMax-M2.5-highspeed' },
     { value: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },
     { value: 'MiniMax-M2', label: 'MiniMax-M2 (agentic)' },
@@ -51,7 +48,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           <h3>No agents yet</h3>
           <p>Create your first agent to start orchestrating complex AI workflows</p>
           <Button onClick={onCreate} style={{ marginTop: '8px' }}>
-            <Plus className="h-4 w-4" />
+            <Bot className="h-4 w-4" />
             Create Agent
           </Button>
         </div>
@@ -62,7 +59,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 
 function LoadingSkeleton() {
   return (
-    <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+    <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
       {[1, 2, 3].map((i) => (
         <div key={i} className="card" style={{ padding: '20px' }}>
           <div className="skeleton" style={{ height: '20px', width: '60%', marginBottom: '12px' }} />
@@ -109,19 +106,19 @@ export function AgentList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
           <h2>Agents</h2>
           <p>Configure and manage your AI agents</p>
         </div>
         <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="h-4 w-4" />
+          <Bot className="h-4 w-4" />
           Create Agent
         </Button>
       </div>
 
       {agents && agents.length > 0 ? (
-        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
           {agents.map((agent: Agent, idx: number) => (
             <Card key={agent.id} className="card-animate" style={{ cursor: 'pointer', animationDelay: `${idx * 60}ms` }}>
               <CardHeader>
@@ -152,6 +149,37 @@ export function AgentList() {
                     <span className="data-value">{agent.tools?.length || 0}</span>
                   </div>
                 </div>
+
+                {/* Tool badges */}
+                {agent.tools && agent.tools.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {agent.tools.slice(0, 4).map((tool, i) => (
+                      <Badge key={i} variant="outline" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>
+                        {tool.name}
+                      </Badge>
+                    ))}
+                    {agent.tools.length > 4 && (
+                      <Badge variant="outline" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>
+                        +{agent.tools.length - 4}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Memory & Iterations info */}
+                <div style={{ marginTop: '10px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  {(agent as any).memory_enabled && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <Brain className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                      Memory
+                    </span>
+                  )}
+                  {(agent as any).max_iterations && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Max { (agent as any).max_iterations } iters
+                    </span>
+                  )}
+                </div>
               </CardContent>
               <CardFooter>
                 <Button
@@ -179,15 +207,20 @@ export function AgentList() {
         <EmptyState onCreate={() => setIsCreateModalOpen(true)} />
       )}
 
-      <CreateAgentModal
-        isOpen={isCreateModalOpen}
+      <AgentCreateModal
+        open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={(data) => {
+          api.agents.create(data).then(() => {
+            queryClient.invalidateQueries({ queryKey: ['agents'] });
+          });
+        }}
       />
 
       {selectedAgent && (
         <AgentDetailModal
           agent={selectedAgent}
-          isOpen={!!selectedAgent}
+          open={!!selectedAgent}
           onClose={() => setSelectedAgent(null)}
         />
       )}
@@ -195,176 +228,73 @@ export function AgentList() {
   );
 }
 
-function CreateAgentModal({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    model_provider: 'minimax' as LLMProvider,
-    model_name: 'MiniMax-M2.7',
-    system_prompt: '',
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => api.agents.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-      onClose();
-      setFormData({
-        name: '',
-        description: '',
-        model_provider: 'minimax',
-        model_name: 'MiniMax-M2.7',
-        system_prompt: '',
-      });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMutation.mutate(formData);
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create Agent">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="form-group">
-          <label className="form-label">Name</label>
-          <Input
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Research Agent"
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Description</label>
-          <Input
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Agents that research topics on the web"
-          />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div className="form-group">
-            <label className="form-label">Provider</label>
-            <Select
-              value={formData.model_provider}
-              onChange={(e) => {
-                const newProvider = e.target.value as LLMProvider;
-                const firstModel = PROVIDER_MODELS[newProvider][0].value;
-                setFormData({ ...formData, model_provider: newProvider, model_name: firstModel });
-              }}
-              options={[
-                { value: 'openai', label: 'OpenAI' },
-                { value: 'anthropic', label: 'Anthropic' },
-                { value: 'minimax', label: 'MiniMax' },
-                { value: 'ollama', label: 'Ollama' },
-              ]}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Model</label>
-            <Select
-              value={formData.model_name}
-              onChange={(e) => setFormData({ ...formData, model_name: e.target.value })}
-              options={PROVIDER_MODELS[formData.model_provider]}
-            />
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">System Prompt</label>
-          <Textarea
-            value={formData.system_prompt}
-            onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
-            placeholder="You are a helpful research assistant..."
-            required
-            style={{ minHeight: '120px' }}
-          />
-        </div>
-
-        <div className="form-actions">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={createMutation.isPending}>
-            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Create
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 function AgentDetailModal({
   agent,
-  isOpen,
+  open,
   onClose,
 }: {
   agent: Agent;
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
 }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={agent.name} className="modal-wide">
-      <div className="space-y-4">
-        {agent.description && (
-          <div className="form-group">
-            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Description</label>
-            <p style={{ fontSize: '0.9rem' }}>{agent.description}</p>
-          </div>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div className="form-group">
-            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Provider</label>
-            <p className="mono-value">{getProviderLabel(agent.model_provider)}</p>
-          </div>
-          <div className="form-group">
-            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Model</label>
-            <p className="mono-value">{agent.model_name}</p>
-          </div>
+    <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.15s ease' }}>
+      <div className="modal-backdrop-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
+      <div className="modal" style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '540px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '24px', boxShadow: '0 0 40px rgba(0,0,0,0.6), 0 0 20px var(--accent-dim)', animation: 'fadeUp 0.2s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <h2 style={{ fontFamily: 'Chakra Petch, sans-serif', fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</h2>
+          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', background: 'transparent', border: 'none', borderRadius: '4px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            ✕
+          </button>
         </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {agent.description && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Description</label>
+              <p style={{ fontSize: '0.9rem' }}>{agent.description}</p>
+            </div>
+          )}
 
-        <div className="form-group">
-          <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Status</label>
-          <div style={{ marginTop: '4px' }}>
-            <Badge className={getStatusColor(agent.status)}>{agent.status}</Badge>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label" style={{ color: 'var(--text-secondary)' }}>System Prompt</label>
-          <div className="code-block" style={{ marginTop: '8px' }}>
-            <pre style={{ whiteSpace: 'pre-wrap' }}>{agent.system_prompt}</pre>
-          </div>
-        </div>
-
-        {agent.tools && agent.tools.length > 0 && (
-          <div className="form-group">
-            <label className="form-label" style={{ color: 'var(--text-secondary)' }}>Tools</label>
-            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {agent.tools.map((tool, idx) => (
-                <div key={idx} style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px' }}>
-                  <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{tool.name}</p>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{tool.description}</p>
-                </div>
-              ))}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Provider</label>
+              <p className="mono-value">{getProviderLabel(agent.model_provider)}</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Model</label>
+              <p className="mono-value">{agent.model_name}</p>
             </div>
           </div>
-        )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Status</label>
+            <div style={{ marginTop: '4px' }}>
+              <Badge className={getStatusColor(agent.status)}>{agent.status}</Badge>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>System Prompt</label>
+            <div className="code-block" style={{ marginTop: '8px' }}>
+              <pre style={{ whiteSpace: 'pre-wrap' }}>{agent.system_prompt}</pre>
+            </div>
+          </div>
+
+          {agent.tools && agent.tools.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label className="form-label" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Tools ({agent.tools.length})</label>
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {agent.tools.map((tool, idx) => (
+                  <div key={idx} style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px' }}>
+                    <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>{tool.name}</p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{tool.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }

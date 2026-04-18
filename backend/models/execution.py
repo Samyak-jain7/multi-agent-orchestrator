@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, ForeignKey, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
@@ -8,6 +9,30 @@ Base = declarative_base()
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+
+class OrganizationModel(Base):
+    __tablename__ = "organizations"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, nullable=False)
+    plan = Column(String, nullable=False, default="free")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_api_key = Column(String, nullable=True)
+    org_id = Column(String, ForeignKey("organizations.id"), nullable=True)
+    role = Column(String, nullable=False, default="member")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AgentModel(Base):
@@ -29,8 +54,8 @@ class TaskModel(Base):
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    workflow_id = Column(String, nullable=False, index=True)
-    agent_id = Column(String, nullable=False, index=True)
+    workflow_id = Column(String, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="SET NULL"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     input_data = Column(JSON, nullable=True, default=dict)
@@ -65,9 +90,9 @@ class ExecutionLogModel(Base):
     __tablename__ = "execution_logs"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    workflow_id = Column(String, nullable=False, index=True)
+    workflow_id = Column(String, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True)
     task_id = Column(String, nullable=True, index=True)
-    agent_id = Column(String, nullable=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     event_type = Column(String, nullable=False)
     message = Column(Text, nullable=True)
     meta_data = Column(JSON, nullable=True)

@@ -25,11 +25,7 @@ class LLMProviderStrategy(ABC):
         pass
 
     @abstractmethod
-    async def ainvoke(
-        self,
-        messages: List[BaseMessage],
-        tools: Optional[List[Dict[str, Any]]] = None
-    ) -> BaseMessage:
+    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
         """Send messages to LLM and return response."""
         pass
 
@@ -71,15 +67,8 @@ class OpenAIProvider(LLMProviderStrategy):
             base_url=config.get("base_url"),
         )
 
-    async def ainvoke(
-        self,
-        messages: List[BaseMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> BaseMessage:
+    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
         client = self.get_client(self._config)
-        if tools:
-            bound = client.bind_tools(tools)
-            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,21 +84,14 @@ class AnthropicProvider(LLMProviderStrategy):
 
     def get_client(self, config: Dict[str, Any]) -> ChatAnthropic:
         return ChatAnthropic(
-            model=config.get("model_name", "claude-sonnet-4-6"),
+            model=config.get("model_name", "claude-3-5-sonnet-20241022"),
             temperature=config.get("temperature", 0.7),
             api_key=config.get("api_key"),
             base_url=config.get("base_url"),
         )
 
-    async def ainvoke(
-        self,
-        messages: List[BaseMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> BaseMessage:
+    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
         client = self.get_client(self._config)
-        if tools:
-            bound = client.bind_tools(tools)
-            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -134,15 +116,8 @@ class MiniMaxProvider(LLMProviderStrategy):
             base_url=config.get("base_url", self.DEFAULT_BASE_URL),
         )
 
-    async def ainvoke(
-        self,
-        messages: List[BaseMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> BaseMessage:
+    async def ainvoke(self, messages: List[BaseMessage]) -> BaseMessage:
         client = self.get_client(self._config)
-        if tools:
-            bound = client.bind_tools(tools)
-            return await bound.ainvoke(messages)
         return await client.ainvoke(messages)
 
     def get_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -210,7 +185,7 @@ def load_provider_from_agent(
     
     if env_vars:
         for env_key, env_val in env_vars.items():
-            if env_key.upper().startswith(f"{prefix.upper()}_") or env_key.upper() == f"{prefix.upper()}_API_KEY":
+            if env_key.upper().startswith(f"{prefix}_") or env_key.upper() == f"{prefix}_API_KEY":
                 config_key = env_key[len(prefix) + 1:].lower()
                 if config_key == "api_key":
                     merged["api_key"] = env_val
