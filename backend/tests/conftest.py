@@ -1,3 +1,4 @@
+import asyncio
 """
 pytest fixtures: in-memory SQLite, AsyncClient, sample data, mocked LLM.
 """
