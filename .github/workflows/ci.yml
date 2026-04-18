@@ -58,7 +58,7 @@ jobs:
     needs: lint-backend
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: sqlite+aiosqlite:///:memory:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
       OPENAI_API_KEY: test-key
       MINIMAX_API_KEY: test-key
       APP_API_KEY: ''
@@ -136,7 +136,7 @@ jobs:
           cd backend
           uvicorn main:app --port 8000 &
         env:
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           OPENAI_API_KEY: test-key
           MINIMAX_API_KEY: test-key
 
