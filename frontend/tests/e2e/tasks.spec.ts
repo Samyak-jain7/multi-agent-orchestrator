@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures';
+import { test, expect } from './fixtures';
 
 test.describe('Tasks - List, Filter, Details, and Retry', () => {
   test.beforeEach(async ({ page }) => {

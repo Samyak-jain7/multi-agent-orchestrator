@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures';
+import { test, expect } from './fixtures';
 
 test.describe('Event Stream - SSE Execution Monitoring', () => {
   test.beforeEach(async ({ page }) => {

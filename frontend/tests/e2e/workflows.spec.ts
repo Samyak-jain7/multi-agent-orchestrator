@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures';
+import { test, expect } from './fixtures';
 
 test.describe('Workflows - Full CRUD and Execution', () => {
   test.beforeEach(async ({ page }) => {
