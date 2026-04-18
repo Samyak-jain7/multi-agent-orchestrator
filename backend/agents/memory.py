@@ -1,18 +1,19 @@
 """
 WorkflowMemory — SQLite-backed shared memory for all agents in a workflow.
 """
-import sqlite3
+
 import json
 import os
+import sqlite3
 from datetime import datetime
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 class WorkflowMemory:
     """
     SQLite-backed shared memory for all agents in a workflow.
-    
+
     This enables agents to share context across iterations and allows
     the supervisor to make informed routing decisions.
     """
@@ -51,13 +52,7 @@ class WorkflowMemory:
         """)
         conn.commit()
 
-    def write(
-        self,
-        agent_id: str,
-        role: str,
-        content: str,
-        metadata: Dict[str, Any] = None
-    ) -> int:
+    def write(self, agent_id: str, role: str, content: str, metadata: Dict[str, Any] = None) -> int:
         """
         Append an agent's message to shared memory.
         Returns the row ID.

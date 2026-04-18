@@ -1,9 +1,10 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-import os
+
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 load_dotenv()
 
@@ -51,6 +52,7 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     from models.execution import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

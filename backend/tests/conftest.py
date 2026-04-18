@@ -1,20 +1,19 @@
-import asyncio
-
 """
 pytest fixtures: in-memory SQLite, AsyncClient, sample data, mocked LLM.
 """
+
 import asyncio
 import os
 import tempfile
 from datetime import datetime
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy import text, event
-from sqlalchemy.pool import StaticPool
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import event, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 os.environ["APP_API_KEY"] = "test-api-key"
 os.environ["LOG_LEVEL"] = "DEBUG"
@@ -43,6 +42,7 @@ def _set_fk_pragma(dbapi_conn, connection_record):
     cursor.execute("PRAGMA foreign_keys = ON")
     cursor.close()
 
+
 TEST_SESSION_FACTORY = async_sessionmaker(
     TEST_ENGINE,
     class_=AsyncSession,
@@ -52,6 +52,7 @@ TEST_SESSION_FACTORY = async_sessionmaker(
 
 # Create schema once at module load
 import inspect
+
 _sentinel = object()
 _last_create = [_sentinel]
 
@@ -95,8 +96,8 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="function")
 async def app():
-    from main import app as fastapi_app
     from core.database import get_db
+    from main import app as fastapi_app
 
     async def _override():
         async with TEST_SESSION_FACTORY() as session:
@@ -106,6 +107,7 @@ async def app():
 
     # Ensure task_queue is marked running for test context
     from agents.queue import task_queue
+
     task_queue._running = True
 
     yield fastapi_app
@@ -230,8 +232,9 @@ def mock_llm():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 async def mock_task_queue():
-    from agents.queue import TaskQueue, QueuedTask
     import uuid
+
+    from agents.queue import QueuedTask, TaskQueue
 
     queue = TaskQueue(max_concurrent=10)
     task_store = {}

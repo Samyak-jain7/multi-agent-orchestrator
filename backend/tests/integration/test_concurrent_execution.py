@@ -4,11 +4,11 @@ Concurrent execution tests.
 - Tests that MAX_CONCURRENT_TASKS is respected
 - Tests task timeout behavior
 """
+
 import asyncio
 import time
 
 import pytest
-
 from agents.queue import task_queue
 
 
@@ -91,9 +91,9 @@ async def test_max_concurrent_respected(client, make_agent, limited_queue):
     for _ in range(60):
         await asyncio.sleep(0.5)
         done = sum(
-            1 for tid in task_ids
-            if task_queue.get_task(tid) and
-               task_queue.get_task(tid).status.value in ("completed", "failed")
+            1
+            for tid in task_ids
+            if task_queue.get_task(tid) and task_queue.get_task(tid).status.value in ("completed", "failed")
         )
         if done == len(task_ids):
             completed = done
@@ -111,8 +111,9 @@ async def test_task_timeout_becomes_failed(client, make_agent):
     A task that runs past TASK_TIMEOUT_SECONDS should be marked failed.
     We simulate this by setting a very short timeout via config override.
     """
-    from agents.queue import TaskQueue, QueuedTask, QueueStatus
     from unittest.mock import patch
+
+    from agents.queue import QueuedTask, QueueStatus, TaskQueue
 
     agent = await make_agent(name="Timeout Agent")
 
@@ -326,9 +327,9 @@ async def test_queue_order_preserved(client, make_agent):
     for _ in range(40):
         await asyncio.sleep(0.5)
         done = sum(
-            1 for tid in task_ids
-            if task_queue.get_task(tid) and
-               task_queue.get_task(tid).status.value in ("completed", "failed")
+            1
+            for tid in task_ids
+            if task_queue.get_task(tid) and task_queue.get_task(tid).status.value in ("completed", "failed")
         )
         if done == len(task_ids):
             break

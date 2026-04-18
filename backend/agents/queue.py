@@ -1,10 +1,10 @@
 import asyncio
+import logging
 import uuid
-from typing import Dict, Any, Callable, Awaitable, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,15 @@ class TaskQueue:
         task.status = QueueStatus.PROCESSING
         task.started_at = datetime.utcnow()
 
-        await self._emit_event(task.task_id, {
-            "type": "status_changed",
-            "task_id": task.task_id,
-            "status": "processing",
-            "timestamp": task.started_at.isoformat()
-        })
+        await self._emit_event(
+            task.task_id,
+            {
+                "type": "status_changed",
+                "task_id": task.task_id,
+                "status": "processing",
+                "timestamp": task.started_at.isoformat(),
+            },
+        )
 
         try:
             handler = self._get_handler(task.task_type)
@@ -101,13 +104,16 @@ class TaskQueue:
             task.completed_at = datetime.utcnow()
             task.progress = 1.0
 
-            await self._emit_event(task.task_id, {
-                "type": "status_changed",
-                "task_id": task.task_id,
-                "status": "completed",
-                "result": result,
-                "timestamp": task.completed_at.isoformat()
-            })
+            await self._emit_event(
+                task.task_id,
+                {
+                    "type": "status_changed",
+                    "task_id": task.task_id,
+                    "status": "completed",
+                    "result": result,
+                    "timestamp": task.completed_at.isoformat(),
+                },
+            )
 
         except Exception as e:
             task.status = QueueStatus.FAILED
@@ -116,13 +122,16 @@ class TaskQueue:
 
             logger.error(f"Task {task.task_id} failed: {str(e)}")
 
-            await self._emit_event(task.task_id, {
-                "type": "status_changed",
-                "task_id": task.task_id,
-                "status": "failed",
-                "error": str(e),
-                "timestamp": task.completed_at.isoformat()
-            })
+            await self._emit_event(
+                task.task_id,
+                {
+                    "type": "status_changed",
+                    "task_id": task.task_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "timestamp": task.completed_at.isoformat(),
+                },
+            )
 
     def _get_handler(self, task_type: str) -> Optional[Callable]:
         handlers = {
@@ -131,11 +140,7 @@ class TaskQueue:
         }
         return handlers.get(task_type)
 
-    async def _handle_workflow_execution(
-        self,
-        payload: Dict[str, Any],
-        task: QueuedTask
-    ) -> Dict[str, Any]:
+    async def _handle_workflow_execution(self, payload: Dict[str, Any], task: QueuedTask) -> Dict[str, Any]:
         from agents.executor_v1 import AgentExecutor as AgentExecutorV1
         from agents.executor_v2 import SupervisorExecutor
         from core.database import get_db_context
@@ -155,11 +160,7 @@ class TaskQueue:
             result = await executor.execute_workflow(workflow_id, input_data)
             return result
 
-    async def _handle_agent_task(
-        self,
-        payload: Dict[str, Any],
-        task: QueuedTask
-    ) -> Dict[str, Any]:
+    async def _handle_agent_task(self, payload: Dict[str, Any], task: QueuedTask) -> Dict[str, Any]:
         await asyncio.sleep(0.1)
         return {"status": "completed", "agent_id": payload.get("agent_id")}
 
@@ -175,32 +176,27 @@ class TaskQueue:
                 logger.error(f"Subscriber {subscriber_id} error: {e}")
 
     async def _publish_event(self, event):
-        await self._emit_event(event.task_id or "", {
-            "type": "execution_event",
-            "event_type": event.event_type,
-            "workflow_id": event.workflow_id,
-            "task_id": event.task_id,
-            "agent_id": event.agent_id,
-            "message": event.message,
-            "meta_data": event.meta_data,
-            "timestamp": event.timestamp.isoformat()
-        })
+        await self._emit_event(
+            event.task_id or "",
+            {
+                "type": "execution_event",
+                "event_type": event.event_type,
+                "workflow_id": event.workflow_id,
+                "task_id": event.task_id,
+                "agent_id": event.agent_id,
+                "message": event.message,
+                "meta_data": event.meta_data,
+                "timestamp": event.timestamp.isoformat(),
+            },
+        )
 
-    def subscribe(
-        self,
-        subscriber_id: str,
-        callback: Callable[[Dict[str, Any]], Awaitable[None]]
-    ):
+    def subscribe(self, subscriber_id: str, callback: Callable[[Dict[str, Any]], Awaitable[None]]):
         self._subscribers[subscriber_id] = callback
 
     def unsubscribe(self, subscriber_id: str):
         self._subscribers.pop(subscriber_id, None)
 
-    async def enqueue(
-        self,
-        task_type: str,
-        payload: Dict[str, Any]
-    ) -> str:
+    async def enqueue(self, task_type: str, payload: Dict[str, Any]) -> str:
         # Prevent memory leak by pruning old tasks
         if len(self._tasks) > 1000:
             # Remove 100 oldest tasks
@@ -210,21 +206,20 @@ class TaskQueue:
 
         task_id = str(uuid.uuid4())
 
-        task = QueuedTask(
-            task_id=task_id,
-            task_type=task_type,
-            payload=payload
-        )
+        task = QueuedTask(task_id=task_id, task_type=task_type, payload=payload)
 
         self._tasks[task_id] = task
         await self._queue.put(task)
 
-        await self._emit_event(task_id, {
-            "type": "task_enqueued",
-            "task_id": task_id,
-            "task_type": task_type,
-            "timestamp": task.created_at.isoformat()
-        })
+        await self._emit_event(
+            task_id,
+            {
+                "type": "task_enqueued",
+                "task_id": task_id,
+                "task_type": task_type,
+                "timestamp": task.created_at.isoformat(),
+            },
+        )
 
         return task_id
 
@@ -234,11 +229,7 @@ class TaskQueue:
     def get_tasks(self) -> List[QueuedTask]:
         return list(self._tasks.values())
 
-    async def get_task_events(
-        self,
-        task_id: str,
-        after_index: int = 0
-    ) -> List[Dict[str, Any]]:
+    async def get_task_events(self, task_id: str, after_index: int = 0) -> List[Dict[str, Any]]:
         task = self._tasks.get(task_id)
         if not task:
             return []

@@ -4,6 +4,7 @@ Covers: GET /stats, GET /task/{id}/status found/notfound,
 GET /task/{id}/events, POST /log, GET /logs/{workflow_id},
 GET /stream/{id} Content-Type: text/event-stream.
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -20,9 +21,7 @@ class TestExecutionStats:
         assert data["total_tasks"] == 0
         assert "success_rate" in data
 
-    async def test_get_stats_with_data(
-        self, client: AsyncClient, sample_agent, sample_workflow, sample_task
-    ):
+    async def test_get_stats_with_data(self, client: AsyncClient, sample_agent, sample_workflow, sample_task):
         response = await client.get("/api/v1/execution/stats")
         assert response.status_code == 200
         data = response.json()
@@ -34,32 +33,20 @@ class TestExecutionStats:
 class TestExecutionTaskStatus:
     """GET /api/v1/execution/task/{task_id}/status"""
 
-    async def test_get_task_status_from_db(
-        self, client: AsyncClient, sample_task
-    ):
-        response = await client.get(
-            f"/api/v1/execution/task/{sample_task.id}/status"
-        )
+    async def test_get_task_status_from_db(self, client: AsyncClient, sample_task):
+        response = await client.get(f"/api/v1/execution/task/{sample_task.id}/status")
         assert response.status_code == 200
         data = response.json()
         assert data["task_id"] == sample_task.id
         assert "status" in data
 
     async def test_get_task_status_not_found(self, client: AsyncClient):
-        response = await client.get(
-            "/api/v1/execution/task/nonexistent-id/status"
-        )
+        response = await client.get("/api/v1/execution/task/nonexistent-id/status")
         assert response.status_code == 404
 
-    async def test_get_task_status_in_queue(
-        self, client: AsyncClient, mock_task_queue
-    ):
-        task_id = await mock_task_queue.enqueue(
-            "agent_task", {"agent_id": "test-agent"}
-        )
-        response = await client.get(
-            f"/api/v1/execution/task/{task_id}/status"
-        )
+    async def test_get_task_status_in_queue(self, client: AsyncClient, mock_task_queue):
+        task_id = await mock_task_queue.enqueue("agent_task", {"agent_id": "test-agent"})
+        response = await client.get(f"/api/v1/execution/task/{task_id}/status")
         assert response.status_code == 200
         data = response.json()
         assert data["task_id"] == task_id
@@ -69,32 +56,22 @@ class TestExecutionTaskEvents:
     """GET /api/v1/execution/task/{task_id}/events"""
 
     async def test_get_task_events_empty(self, client: AsyncClient, sample_task):
-        response = await client.get(
-            f"/api/v1/execution/task/{sample_task.id}/events"
-        )
+        response = await client.get(f"/api/v1/execution/task/{sample_task.id}/events")
         assert response.status_code == 200
         data = response.json()
         assert "events" in data
         assert "count" in data
 
-    async def test_get_task_events_after_index(
-        self, client: AsyncClient, sample_task
-    ):
-        response = await client.get(
-            f"/api/v1/execution/task/{sample_task.id}/events?after_index=0"
-        )
+    async def test_get_task_events_after_index(self, client: AsyncClient, sample_task):
+        response = await client.get(f"/api/v1/execution/task/{sample_task.id}/events?after_index=0")
         assert response.status_code == 200
 
     async def test_get_task_events_not_found(self, client: AsyncClient):
-        response = await client.get(
-            "/api/v1/execution/task/nonexistent-id/events"
-        )
+        response = await client.get("/api/v1/execution/task/nonexistent-id/events")
         assert response.status_code == 200  # Returns empty events list
 
     async def test_get_task_events_returns_list(self, client: AsyncClient, sample_task):
-        response = await client.get(
-            f"/api/v1/execution/task/{sample_task.id}/events"
-        )
+        response = await client.get(f"/api/v1/execution/task/{sample_task.id}/events")
         data = response.json()
         assert isinstance(data["events"], list)
 
@@ -102,9 +79,7 @@ class TestExecutionTaskEvents:
 class TestExecutionLog:
     """POST /api/v1/execution/log"""
 
-    async def test_create_execution_log(
-        self, client: AsyncClient, sample_workflow
-    ):
+    async def test_create_execution_log(self, client: AsyncClient, sample_workflow):
         response = await client.post(
             "/api/v1/execution/log",
             params={
@@ -120,9 +95,7 @@ class TestExecutionLog:
         assert "id" in data
         assert "timestamp" in data
 
-    async def test_create_execution_log_with_optional_fields(
-        self, client: AsyncClient, sample_workflow, sample_agent
-    ):
+    async def test_create_execution_log_with_optional_fields(self, client: AsyncClient, sample_workflow, sample_agent):
         response = await client.post(
             "/api/v1/execution/log",
             params={
@@ -145,18 +118,12 @@ class TestExecutionLog:
 class TestExecutionLogsByWorkflow:
     """GET /api/v1/execution/logs/{workflow_id}"""
 
-    async def test_get_execution_logs_empty(
-        self, client: AsyncClient, sample_workflow
-    ):
-        response = await client.get(
-            f"/api/v1/execution/logs/{sample_workflow.id}"
-        )
+    async def test_get_execution_logs_empty(self, client: AsyncClient, sample_workflow):
+        response = await client.get(f"/api/v1/execution/logs/{sample_workflow.id}")
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_get_execution_logs_with_items(
-        self, client: AsyncClient, sample_workflow
-    ):
+    async def test_get_execution_logs_with_items(self, client: AsyncClient, sample_workflow):
         # Create two logs
         for i in range(2):
             await client.post(
@@ -168,9 +135,7 @@ class TestExecutionLogsByWorkflow:
                 },
             )
 
-        response = await client.get(
-            f"/api/v1/execution/logs/{sample_workflow.id}"
-        )
+        response = await client.get(f"/api/v1/execution/logs/{sample_workflow.id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
@@ -194,15 +159,11 @@ class TestExecutionLogsByWorkflow:
                 },
             )
 
-        response = await client.get(
-            f"/api/v1/execution/logs/{sample_workflow.id}?skip={skip}&limit={limit}"
-        )
+        response = await client.get(f"/api/v1/execution/logs/{sample_workflow.id}?skip={skip}&limit={limit}")
         assert response.status_code == 200
         assert len(response.json()) == expected
 
-    async def test_get_execution_logs_workflow_not_found(
-        self, client: AsyncClient
-    ):
+    async def test_get_execution_logs_workflow_not_found(self, client: AsyncClient):
         response = await client.get("/api/v1/execution/logs/nonexistent-id")
         assert response.status_code == 200
         assert response.json() == []
@@ -211,23 +172,18 @@ class TestExecutionLogsByWorkflow:
 class TestExecutionStream:
     """GET /api/v1/execution/stream/{task_id}"""
 
-    async def test_stream_task_events_content_type(
-        self, client: AsyncClient, sample_task
-    ):
+    async def test_stream_task_events_content_type(self, client: AsyncClient, sample_task):
         """Stream endpoint should return text/event-stream Content-Type."""
         response = await client.get(
             f"/api/v1/execution/stream/{sample_task.id}",
             timeout=0.5,
         )
         assert response.status_code == 200
-        assert (
-            "text/event-stream" in response.headers.get("Content-Type", "")
-            or "text/event-stream" in response.headers.get("content-type", "")
-        )
+        assert "text/event-stream" in response.headers.get(
+            "Content-Type", ""
+        ) or "text/event-stream" in response.headers.get("content-type", "")
 
-    async def test_stream_task_events_disconnect(
-        self, client: AsyncClient, sample_task
-    ):
+    async def test_stream_task_events_disconnect(self, client: AsyncClient, sample_task):
         """Server should handle client disconnect gracefully."""
         response = await client.get(
             f"/api/v1/execution/stream/{sample_task.id}",
@@ -236,9 +192,7 @@ class TestExecutionStream:
         # Should get a response (even if just a heartbeat)
         assert response.status_code == 200
 
-    async def test_stream_task_events_nonexistent_task(
-        self, client: AsyncClient
-    ):
+    async def test_stream_task_events_nonexistent_task(self, client: AsyncClient):
         """Non-existent task should still connect (queue-based)."""
         response = await client.get(
             "/api/v1/execution/stream/nonexistent-task-id",
@@ -284,7 +238,7 @@ class TestExecutionDashboard:
         sample_workflow,
         sample_agent,
     ):
-        from models.execution import WorkflowModel, TaskModel
+        from models.execution import TaskModel, WorkflowModel
 
         # Create a running workflow
         running_wf = WorkflowModel(
@@ -307,8 +261,9 @@ class TestExecutionDashboard:
         sample_workflow,
         sample_agent,
     ):
-        from models.execution import TaskModel
         from datetime import datetime
+
+        from models.execution import TaskModel
 
         task = TaskModel(
             workflow_id=sample_workflow.id,

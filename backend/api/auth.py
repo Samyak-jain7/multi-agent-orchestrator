@@ -1,18 +1,18 @@
 """
 Authentication API — User registration, login, and API key management.
 """
-import logging
+
 import hashlib
+import logging
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
 from core.database import get_db
-from models.execution import UserModel, OrganizationModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from models.execution import OrganizationModel, UserModel
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -70,10 +70,7 @@ class ApiKeyVerifyResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def get_current_user(
-    api_key: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
-) -> UserModel:
+async def get_current_user(api_key: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> UserModel:
     """
     Dependency to get the current authenticated user from an API key.
     Usage: async def endpoint(user: UserModel = Depends(get_current_user)):
@@ -83,18 +80,18 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API key",
         )
-    
+
     hashed = hash_api_key(api_key)
     stmt = select(UserModel).where(UserModel.hashed_api_key == hashed)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
         )
-    
+
     return user
 
 
@@ -107,30 +104,30 @@ async def get_current_user(
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """
     Register a new user and organization.
-    
+
     Returns the API key ONCE — the user must save it as it cannot be recovered.
     """
     # Check if email already exists
     stmt = select(UserModel).where(UserModel.email == request.email)
     result = await db.execute(stmt)
     existing_user = result.scalar_one_or_none()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
-    
+
     # Create organization (or use default)
     org_name = request.organization_name or f"{request.email.split('@')[0]}'s Org"
     org = OrganizationModel(name=org_name)
     db.add(org)
     await db.flush()
-    
+
     # Generate API key
     api_key = generate_api_key()
     hashed_api_key = hash_api_key(api_key)
-    
+
     # Create user
     user = UserModel(
         email=request.email,
@@ -142,9 +139,9 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     await db.commit()
     await db.refresh(user)
     await db.refresh(org)
-    
+
     logger.info(f"New user registered: {request.email}, org: {org_name}")
-    
+
     return RegisterResponse(
         user_id=user.id,
         email=user.email,
@@ -159,28 +156,28 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Login with email (for demo purposes).
-    
+
     In production, this should verify credentials properly.
     This is a simplified version that just checks if the email exists
     and returns the API key for that user.
-    
+
     NOTE: This endpoint is for development/testing. In production,
     implement proper password authentication.
     """
     stmt = select(UserModel).where(UserModel.email == request.email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     # In a real system, we'd verify a password here
     # For this demo, we just return the user info
     # The API key was already returned at registration
-    
+
     return LoginResponse(
         user_id=user.id,
         email=user.email,
@@ -190,24 +187,21 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/verify", response_model=ApiKeyVerifyResponse)
-async def verify_api_key(
-    api_key: str,
-    db: AsyncSession = Depends(get_db)
-):
+async def verify_api_key(api_key: str, db: AsyncSession = Depends(get_db)):
     """
     Verify if an API key is valid.
     """
     if not api_key:
         return ApiKeyVerifyResponse(valid=False)
-    
+
     hashed = hash_api_key(api_key)
     stmt = select(UserModel).where(UserModel.hashed_api_key == hashed)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         return ApiKeyVerifyResponse(valid=False)
-    
+
     return ApiKeyVerifyResponse(
         valid=True,
         user_id=user.id,

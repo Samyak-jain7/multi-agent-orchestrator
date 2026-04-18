@@ -1,15 +1,15 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, ForeignKey, Boolean
+import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
-import uuid
 
 Base = declarative_base()
 
 
 def generate_uuid():
     return str(uuid.uuid4())
-
 
 
 class OrganizationModel(Base):
@@ -20,7 +20,6 @@ class OrganizationModel(Base):
     plan = Column(String, nullable=False, default="free")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
 
 
 class UserModel(Base):

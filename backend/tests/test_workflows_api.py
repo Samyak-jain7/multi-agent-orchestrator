@@ -4,6 +4,7 @@ Covers: POST happy/invalid-agent, GET list, GET {id} found/notfound,
 PUT update, DELETE cascade, POST /execute returns task_id/notfound/422,
 GET tasks for workflow.
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -29,9 +30,7 @@ class TestWorkflowsCreate:
         assert "created_at" in data
 
     @pytest.mark.parametrize("missing_field", ["name"])
-    async def test_create_workflow_missing_required_field(
-        self, client: AsyncClient, missing_field: str
-    ):
+    async def test_create_workflow_missing_required_field(self, client: AsyncClient, missing_field: str):
         response = await client.post(
             "/api/v1/workflows",
             json={"description": "A workflow", "agent_ids": [], "config": {}},
@@ -49,9 +48,7 @@ class TestWorkflowsCreate:
         )
         assert response.status_code == 422
 
-    async def test_create_workflow_with_agents(
-        self, client: AsyncClient, sample_agent
-    ):
+    async def test_create_workflow_with_agents(self, client: AsyncClient, sample_agent):
         response = await client.post(
             "/api/v1/workflows",
             json={
@@ -153,9 +150,7 @@ class TestWorkflowsDelete:
 class TestWorkflowsExecute:
     """POST /api/v1/workflows/{workflow_id}/execute"""
 
-    async def test_execute_workflow_returns_task_id(
-        self, client: AsyncClient, sample_workflow, mock_task_queue
-    ):
+    async def test_execute_workflow_returns_task_id(self, client: AsyncClient, sample_workflow, mock_task_queue):
         response = await client.post(
             f"/api/v1/workflows/{sample_workflow.id}/execute",
             json={"input_data": {"query": "test"}},
@@ -173,18 +168,14 @@ class TestWorkflowsExecute:
         )
         assert response.status_code == 404
 
-    async def test_execute_workflow_with_empty_input(
-        self, client: AsyncClient, sample_workflow, mock_task_queue
-    ):
+    async def test_execute_workflow_with_empty_input(self, client: AsyncClient, sample_workflow, mock_task_queue):
         response = await client.post(
             f"/api/v1/workflows/{sample_workflow.id}/execute",
             json={"input_data": {}},
         )
         assert response.status_code == 202
 
-    async def test_execute_workflow_with_task_overrides(
-        self, client: AsyncClient, sample_workflow, mock_task_queue
-    ):
+    async def test_execute_workflow_with_task_overrides(self, client: AsyncClient, sample_workflow, mock_task_queue):
         response = await client.post(
             f"/api/v1/workflows/{sample_workflow.id}/execute",
             json={
@@ -198,21 +189,13 @@ class TestWorkflowsExecute:
 class TestWorkflowsTasks:
     """GET /api/v1/workflows/{workflow_id}/tasks"""
 
-    async def test_get_workflow_tasks_empty(
-        self, client: AsyncClient, sample_workflow
-    ):
-        response = await client.get(
-            f"/api/v1/workflows/{sample_workflow.id}/tasks"
-        )
+    async def test_get_workflow_tasks_empty(self, client: AsyncClient, sample_workflow):
+        response = await client.get(f"/api/v1/workflows/{sample_workflow.id}/tasks")
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_get_workflow_tasks_with_tasks(
-        self, client: AsyncClient, sample_workflow, sample_task
-    ):
-        response = await client.get(
-            f"/api/v1/workflows/{sample_workflow.id}/tasks"
-        )
+    async def test_get_workflow_tasks_with_tasks(self, client: AsyncClient, sample_workflow, sample_task):
+        response = await client.get(f"/api/v1/workflows/{sample_workflow.id}/tasks")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -247,9 +230,7 @@ class TestWorkflowsTasks:
         db_session.add(task)
         await db_session.commit()
 
-        response = await client.get(
-            f"/api/v1/workflows/{sample_workflow.id}/tasks"
-        )
+        response = await client.get(f"/api/v1/workflows/{sample_workflow.id}/tasks")
         assert response.status_code == 200
         data = response.json()
         assert any(t["status"] == task_status for t in data)
@@ -280,19 +261,13 @@ class TestWorkflowsCascadeDelete:
         await db_session.commit()
 
         # Verify tasks exist
-        response = await client.get(
-            f"/api/v1/workflows/{sample_workflow.id}/tasks"
-        )
+        response = await client.get(f"/api/v1/workflows/{sample_workflow.id}/tasks")
         assert len(response.json()) == 2
 
         # Delete workflow
-        delete_response = await client.delete(
-            f"/api/v1/workflows/{sample_workflow.id}"
-        )
+        delete_response = await client.delete(f"/api/v1/workflows/{sample_workflow.id}")
         assert delete_response.status_code == 204
 
         # Tasks should be gone
-        tasks_response = await client.get(
-            f"/api/v1/workflows/{sample_workflow.id}/tasks"
-        )
+        tasks_response = await client.get(f"/api/v1/workflows/{sample_workflow.id}/tasks")
         assert tasks_response.json() == []

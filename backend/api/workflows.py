@@ -1,28 +1,28 @@
 """
 Workflow CRUD and execution API endpoints.
 """
+
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-
+from agents.memory import WorkflowMemory
+from agents.queue import task_queue
 from core.database import get_db
-from models.execution import WorkflowModel, TaskModel, UserModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from models.execution import TaskModel, UserModel, WorkflowModel
+from pydantic import BaseModel, Field
 from schemas import (
-    WorkflowCreate,
-    WorkflowUpdate,
-    WorkflowResponse,
-    WorkflowStatus,
-    WorkflowExecuteRequest,
     TaskResponse,
     TaskStatus,
+    WorkflowCreate,
+    WorkflowExecuteRequest,
+    WorkflowResponse,
+    WorkflowStatus,
+    WorkflowUpdate,
 )
-from agents.queue import task_queue
-from agents.memory import WorkflowMemory
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -35,6 +35,7 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 class WorkflowDefinitionCreate(BaseModel):
     """Create a workflow with DAG definition."""
+
     nodes: List[Dict[str, Any]] = Field(default_factory=list)
     edges: List[Dict[str, Any]] = Field(default_factory=list)
     max_iterations: int = Field(default=10)
@@ -42,6 +43,7 @@ class WorkflowDefinitionCreate(BaseModel):
 
 class WorkflowCreateV2(BaseModel):
     """Enhanced workflow creation with DAG support."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     workflow_definition: Optional[Dict[str, Any]] = None  # DAG definition
@@ -53,6 +55,7 @@ class WorkflowCreateV2(BaseModel):
 
 class WorkflowUpdateV2(BaseModel):
     """Enhanced workflow update."""
+
     name: Optional[str] = None
     description: Optional[str] = None
     workflow_definition: Optional[Dict[str, Any]] = None
@@ -64,6 +67,7 @@ class WorkflowUpdateV2(BaseModel):
 
 class WorkflowMemoryResponse(BaseModel):
     """Response for workflow memory."""
+
     workflow_id: str
     messages: List[Dict[str, Any]]
     summary: str
@@ -73,15 +77,16 @@ class WorkflowMemoryResponse(BaseModel):
 # Auth helper
 # ---------------------------------------------------------------------------
 
+
 async def get_current_user(
-    x_api_key: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
+    x_api_key: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)
 ) -> Optional[UserModel]:
     """Get current user from API key (optional)."""
     if not x_api_key:
         return None
-    
+
     import hashlib
+
     hashed = hashlib.sha256(x_api_key.encode()).hexdigest()
     stmt = select(UserModel).where(UserModel.hashed_api_key == hashed)
     result = await db.execute(stmt)
@@ -120,13 +125,13 @@ async def list_workflows(
 ):
     """List all workflows with pagination. Optionally filter by owner."""
     stmt = select(WorkflowModel)
-    
+
     # Multi-tenant: filter by owner_id
     if owner_id:
         stmt = stmt.where(WorkflowModel.owner_id == owner_id)
     elif current_user:
         stmt = stmt.where(WorkflowModel.owner_id == current_user.org_id)
-    
+
     stmt = stmt.offset(skip).limit(limit).order_by(WorkflowModel.created_at.desc())
     result = await db.execute(stmt)
     workflows = result.scalars().all()
@@ -170,12 +175,12 @@ async def create_workflow(
 ):
     """Create a new workflow with optional DAG definition."""
     logger.info(f"Creating workflow: name={workflow_data.name!r}")
-    
+
     # Determine owner_id
     owner_id = None
     if current_user:
         owner_id = current_user.org_id
-    
+
     # Use workflow_definition if provided, otherwise build from agent_ids
     workflow_def = workflow_data.workflow_definition
     if not workflow_def and workflow_data.agent_ids:
@@ -184,22 +189,24 @@ async def create_workflow(
         edges = []
         for i, agent_id in enumerate(workflow_data.agent_ids):
             node_id = f"agent_{i}"
-            nodes.append({
-                "id": node_id,
-                "type": "agent",
-                "agent_id": agent_id,
-                "tools": [],
-            })
+            nodes.append(
+                {
+                    "id": node_id,
+                    "type": "agent",
+                    "agent_id": agent_id,
+                    "tools": [],
+                }
+            )
             if i == 0:
                 edges.append({"from": "supervisor", "to": node_id})
             edges.append({"from": node_id, "to": "supervisor"})
-        
+
         workflow_def = {
             "nodes": [{"id": "supervisor", "type": "supervisor", "config": {}}] + nodes,
             "edges": edges,
             "max_iterations": workflow_data.max_iterations,
         }
-    
+
     workflow = WorkflowModel(
         name=workflow_data.name,
         description=workflow_data.description,
@@ -339,7 +346,7 @@ async def get_workflow_memory(
 ):
     """
     Get the shared memory state for a workflow.
-    
+
     This shows all messages exchanged between agents during workflow execution.
     """
     stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
@@ -360,14 +367,14 @@ async def get_workflow_memory(
         )
 
     memory = WorkflowMemory(workflow_id)
-    
+
     if agent_id:
         messages = memory.get_agent_messages(agent_id)
     else:
         messages = memory.read(limit=limit)
-    
+
     summary = memory.get_summary()
-    
+
     return WorkflowMemoryResponse(
         workflow_id=workflow_id,
         messages=messages,
@@ -401,7 +408,7 @@ async def clear_workflow_memory(
 
     memory = WorkflowMemory(workflow_id)
     memory.clear()
-    
+
     logger.info(f"Workflow memory cleared: {workflow_id}")
 
 
@@ -427,11 +434,7 @@ async def get_workflow_tasks(
             detail="Access denied",
         )
 
-    stmt = (
-        select(TaskModel)
-        .where(TaskModel.workflow_id == workflow_id)
-        .order_by(TaskModel.priority.desc())
-    )
+    stmt = select(TaskModel).where(TaskModel.workflow_id == workflow_id).order_by(TaskModel.priority.desc())
     result = await db.execute(stmt)
     tasks = result.scalars().all()
 

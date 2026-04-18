@@ -1,21 +1,21 @@
 """
 Multi-Agent Orchestrator - FastAPI Backend
 """
-import os
-import logging
+
 import json
+import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import FastAPI, Request, HTTPException
+from agents.queue import task_queue
+from api import agents_router, execution_router, tasks_router, workflows_router
+from core.database import close_db, init_db
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-
-from core.database import init_db, close_db
-from agents.queue import task_queue
-from api import agents_router, workflows_router, tasks_router, execution_router
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 """
 Composio Tool Manager — manages Composio tools for agents.
 """
+
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ USEFUL_TOOLS = [
 class ComposioToolManager:
     """
     Manages Composio tools for agents.
-    
+
     Provides a filtered, safe subset of Composio tools that can be
     attached to agents in the orchestrator.
     """
@@ -63,6 +64,7 @@ class ComposioToolManager:
         if self._client is None:
             try:
                 from composio import Composio
+
                 self._client = Composio()
             except Exception as e:
                 logger.warning(f"Composio client init failed: {e}")
@@ -87,27 +89,31 @@ class ComposioToolManager:
             tools = self.client.tools.list()
             available = []
             seen = set()
-            
+
             for tool in tools:
-                name = getattr(tool, 'name', None) or getattr(tool, 'id', None)
+                name = getattr(tool, "name", None) or getattr(tool, "id", None)
                 if name and name in USEFUL_TOOLS and name not in seen:
                     seen.add(name)
-                    available.append({
-                        "name": name,
-                        "description": getattr(tool, 'description', f"Tool: {name}"),
-                        "category": self._get_category(name),
-                    })
-            
+                    available.append(
+                        {
+                            "name": name,
+                            "description": getattr(tool, "description", f"Tool: {name}"),
+                            "category": self._get_category(name),
+                        }
+                    )
+
             # Fill in any missing from our static list
             for cat, names in self.TOOL_CATEGORIES.items():
                 for name in names:
                     if name not in seen:
-                        available.append({
-                            "name": name,
-                            "description": f"Tool: {name}",
-                            "category": cat,
-                        })
-            
+                        available.append(
+                            {
+                                "name": name,
+                                "description": f"Tool: {name}",
+                                "category": cat,
+                            }
+                        )
+
             return available
         except Exception as e:
             logger.warning(f"Failed to list Composio tools: {e}")
@@ -156,7 +162,7 @@ class ComposioToolManager:
         """
         available = self.list_available_tools()
         available_names = {t["name"] for t in available}
-        
+
         return {tool_id: tool_id in available_names for tool_id in tool_ids}
 
     def get_tools_by_category(self, category: str) -> List[Dict[str, str]]:
@@ -169,6 +175,5 @@ class ComposioToolManager:
         all_tools = self.list_available_tools()
         query_lower = query.lower()
         return [
-            t for t in all_tools
-            if query_lower in t["name"].lower() or query_lower in t.get("description", "").lower()
+            t for t in all_tools if query_lower in t["name"].lower() or query_lower in t.get("description", "").lower()
         ]
