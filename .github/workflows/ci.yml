@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, 'deploy-ready-improvements']
+    branches: [main, develop, 'deploy-ready-improvements', 'v2-*']
   pull_request:
     branches: [main]
 
