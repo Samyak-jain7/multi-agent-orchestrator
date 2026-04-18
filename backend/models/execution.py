@@ -1,9 +1,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -45,6 +44,7 @@ class AgentModel(Base):
     system_prompt = Column(Text, nullable=False)
     tools = Column(JSON, nullable=True, default=list)
     config = Column(JSON, nullable=True, default=dict)
+    owner_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -78,6 +78,7 @@ class WorkflowModel(Base):
     status = Column(String, nullable=False, default="idle")
     agent_ids = Column(JSON, nullable=False, default=list)
     config = Column(JSON, nullable=True, default=dict)
+    owner_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)

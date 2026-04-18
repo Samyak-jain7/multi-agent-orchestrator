@@ -211,10 +211,7 @@ async def create_workflow(
         name=workflow_data.name,
         description=workflow_data.description,
         agent_ids=workflow_data.agent_ids,
-        workflow_definition=workflow_def,
         config=workflow_data.config,
-        memory_enabled=workflow_data.memory_enabled,
-        max_iterations=workflow_data.max_iterations,
         owner_id=owner_id,
     )
 

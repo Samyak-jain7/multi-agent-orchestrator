@@ -173,11 +173,6 @@ async def create_agent(
         system_prompt=agent_data.system_prompt,
         tools=[t.model_dump() for t in agent_data.tools],
         config=agent_data.config,
-        # New fields (with defaults)
-        tool_ids=[],
-        memory_enabled=True,
-        max_iterations=5,
-        temperature=0.7,
         owner_id=owner_id,
     )
 

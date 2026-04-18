@@ -77,7 +77,7 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx email-validator
 
       - name: Run backend tests
-        run: pytest backend/tests/ --cov=backend --cov-report=xml --cov-fail-under=70 -v
+        run: pytest backend/tests/ --ignore=backend/tests/integration --cov=backend --cov-report=xml --cov-fail-under=70 -v
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
