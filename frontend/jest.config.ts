@@ -6,12 +6,15 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  setupFilesAfterFramework: ['<rootDir>/jest.setup.ts'],
-  coverage: {
-    branches: 70,
-    functions: 75,
-    lines: 75,
-    statements: 75,
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  collectCoverage: true,
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 75,
+      lines: 75,
+      statements: 75,
+    },
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
